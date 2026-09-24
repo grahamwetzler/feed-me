@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -603,28 +604,30 @@ func (s *stopAfterFirst) Fetch(ctx context.Context, req fetch.Request) (*fetch.R
 
 func TestStopEndsRunAfterPageInFlight(t *testing.T) {
 	for _, cancelToo := range []bool{false, true} {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		now := time.Date(2026, 9, 10, 9, 30, 0, 0, la)
-		r := newRunner(t, &now)
-		_, site := loadSite(t, "claude-blog", claudeLinks)
-		posts := postFiles("claude-blog", "https://claude.com/blog/")
-		f, _ := fetcherFor(posts)
-		sf := &stopAfterFirst{Fetcher: f, posts: posts, stop: make(chan struct{})}
-		if cancelToo {
-			sf.cancel = cancel
-		}
-		r.Stop = sf.stop
+		t.Run(fmt.Sprintf("cancel=%v", cancelToo), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			now := time.Date(2026, 9, 10, 9, 30, 0, 0, la)
+			r := newRunner(t, &now)
+			_, site := loadSite(t, "claude-blog", claudeLinks)
+			posts := postFiles("claude-blog", "https://claude.com/blog/")
+			f, _ := fetcherFor(posts)
+			sf := &stopAfterFirst{Fetcher: f, posts: posts, stop: make(chan struct{})}
+			if cancelToo {
+				sf.cancel = cancel
+			}
+			r.Stop = sf.stop
 
-		st, err := r.Run(ctx, site, sf)
-		// A cancelled context also fails the store write, so only a plain stop keeps the page.
-		if !errors.Is(err, ErrStopped) || sf.fetches != 1 || (!cancelToo && st.New != 1) {
-			t.Errorf("cancel=%v: stopped run: %+v, %d fetches, err %v; want the one page in flight only", cancelToo, st, sf.fetches, err)
-		}
-		state, _ := r.Store.SiteState(context.Background(), site.ID)
-		if !state.LastRun.IsZero() {
-			t.Errorf("cancel=%v: a stopped run recorded state %+v; it should run again at the next start", cancelToo, state)
-		}
+			st, err := r.Run(ctx, site, sf)
+			// A cancelled context also fails the store write, so only a plain stop keeps the page.
+			if !errors.Is(err, ErrStopped) || sf.fetches != 1 || (!cancelToo && st.New != 1) {
+				t.Errorf("stopped run: %+v, %d fetches, err %v; want the one page in flight only", st, sf.fetches, err)
+			}
+			state, _ := r.Store.SiteState(context.Background(), site.ID)
+			if !state.LastRun.IsZero() {
+				t.Errorf("a stopped run recorded state %+v; it should run again at the next start", state)
+			}
+		})
 	}
 }
 
