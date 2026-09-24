@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -331,13 +330,11 @@ func TestRobotsCacheDropsExpiredEntries(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for i := range 3 {
-		fetch(strconv.Itoa(i))
-		now = now.Add(robotsTTL) // each token's entry expires before the next is used
-	}
-	fetch("live")
+	fetch("old")
 	now = now.Add(robotsTTL / 2)
-	fetch("new") // sweeps the expired entries but not "live"
+	fetch("live")
+	now = now.Add(robotsTTL / 2) // "old" has now expired, "live" has not
+	fetch("new")                 // one sweep sees both
 	c.robots.mu.Lock()
 	n := len(c.robots.m)
 	c.robots.mu.Unlock()
