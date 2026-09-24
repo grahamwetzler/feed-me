@@ -224,7 +224,7 @@ func newestOnly(fresh []discovery.Candidate, known map[string]store.Known, maxIt
 
 // process fetches, extracts, normalizes and stores one candidate.
 func (r *Runner) process(ctx context.Context, site *config.Site, f fetch.Fetcher, t target, now time.Time, st *Stats, log *slog.Logger) error {
-	hh := hintsHash(t.cand.Hints)
+	hh := hintsHash(site, t.cand.Hints)
 	req := fetch.Request{URL: t.cand.URL}
 	if t.known {
 		// Conditional GET only for stored items: a 304 for an unstored URL
@@ -253,10 +253,22 @@ func (r *Runner) process(ctx context.Context, site *config.Site, f fetch.Fetcher
 	return r.Store.PutValidators(ctx, site.ID, t.cand.URL, v, resp.Status, now)
 }
 
-// hintsHash identifies a candidate's listing hints.
-func hintsHash(h map[string]string) string {
+// hintsHash identifies the hints extraction can read: those named by the
+// site's listing: sources. Others (a sitemap lastmod that changes on every
+// build, say) can't change the item, so they mustn't defeat conditional GET.
+func hintsHash(site *config.Site, h map[string]string) string {
+	it := &site.Item
+	used := map[string]bool{}
+	for _, srcs := range [][]config.Source{it.Canonical, it.Title, it.Summary, it.Author, it.Image,
+		it.Categories, it.Published.Sources, it.Updated.Sources} {
+		for _, s := range srcs {
+			if s.Kind == config.SourceListing {
+				used[s.Expr] = true
+			}
+		}
+	}
 	sum := sha256.New()
-	for _, k := range slices.Sorted(maps.Keys(h)) {
+	for _, k := range slices.Sorted(maps.Keys(used)) {
 		fmt.Fprintf(sum, "%s\x00%s\x00", k, h[k])
 	}
 	return hex.EncodeToString(sum.Sum(nil)[:16])
@@ -341,7 +353,7 @@ func (r *Runner) apply(ctx context.Context, site *config.Site, t target, resp *f
 
 // sameMeta compares the stored fields outside the content hash.
 func sameMeta(a, b *store.Item) bool {
-	return a.URL == b.URL && a.Canonical == b.Canonical && a.Author == b.Author &&
+	return a.URL == b.URL && a.Canonical == b.Canonical && a.Author == b.Author && a.SourcePublished == b.SourcePublished &&
 		a.ImageURL == b.ImageURL && slices.Equal(a.Categories, b.Categories)
 }
 

@@ -476,4 +476,53 @@ func TestChangedListingHintsBypass304(t *testing.T) {
 	}
 }
 
+// Hints no listing: source reads (here a sitemap lastmod) don't change the
+// item, so they must not turn 304s into full fetches.
+func TestUnusedHintsKeepConditionalGET(t *testing.T) {
+	_, site := loadSite(t, "claude-blog", func(s string) string { return s })
+	a := hintsHash(site, map[string]string{"lastmod": "2026-09-24T10:00:00Z"})
+	if b := hintsHash(site, map[string]string{"lastmod": "2026-09-24T11:00:00Z"}); a != b {
+		t.Error("claude-blog reads no listing hints, but a lastmod change altered the hash")
+	}
+	_, sd := loadSite(t, "select-dev", func(s string) string { return s })
+	x := hintsHash(sd, map[string]string{"published": "Mon, 21 Sep 2026 15:12:00 GMT", "lastmod": "1"})
+	if y := hintsHash(sd, map[string]string{"published": "Mon, 21 Sep 2026 15:12:00 GMT", "lastmod": "2"}); x != y {
+		t.Error("select-dev: lastmod is not a listing source but changed the hash")
+	}
+	if y := hintsHash(sd, map[string]string{"published": "Tue, 22 Sep 2026 15:12:00 GMT"}); x == y {
+		t.Error("select-dev: a changed listing:published hint must change the hash")
+	}
+}
+
+// A page that gains a publish date after its first store keeps its frozen
+// published time but records the source date, so later moves are detected.
+func TestGainedSourceDateIsStored(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, la)
+	r := newRunner(t, &now)
+	_, undated := loadSite(t, "claude-blog", func(s string) string {
+		s = claudeLinks(s)
+		i, j := strings.Index(s, "  published:"), strings.Index(s, "  updated:")
+		return s[:i] + "  published:\n    sources: [meta:no-such-date]\n" + s[j:]
+	})
+	_, site := loadSite(t, "claude-blog", claudeLinks)
+	files := postFiles("claude-blog", "https://claude.com/blog/")
+	f, _ := fetcherFor(files)
+	if _, err := r.Run(ctx, undated, f); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := r.Store.ItemByURL(ctx, site.ID, trowe)
+	if before.SourcePublished != "" {
+		t.Fatalf("setup: source date %q", before.SourcePublished)
+	}
+	now = now.Add(time.Hour)
+	if _, err := r.Run(ctx, site, f); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := r.Store.ItemByURL(ctx, site.ID, trowe)
+	if after.SourcePublished != "2026-09-10" || !after.Published.Equal(before.Published) {
+		t.Errorf("source date %q (want 2026-09-10), published %v (want frozen %v)", after.SourcePublished, after.Published, before.Published)
+	}
+}
+
 func discard() *slog.Logger { return slog.New(slog.DiscardHandler) }
