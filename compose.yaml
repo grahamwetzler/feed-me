@@ -1,4 +1,4 @@
-name: feed-me # not the checkout directory's name
+name: feed-me
 services:
   feed-me:
     image: feed-me:latest
