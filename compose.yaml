@@ -1,0 +1,17 @@
+services:
+  rss-er:
+    image: rss-er:latest
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    restart: unless-stopped
+    environment:
+      RSS_ER_PUBLIC_BASE_URL: https://rss.example.com
+    volumes:
+      - rss-er-data:/data
+      - ./deploy/rss-er.yaml:/config/rss-er.yaml:ro
+      - ./sites:/config/sites:ro
+    expose: ["8080"] # the reverse proxy joins this network; no host port needed
+volumes:
+  rss-er-data:

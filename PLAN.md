@@ -401,20 +401,24 @@ The service runs as a long-lived `rss-er run` container behind the user's existi
 - On `SIGTERM`, it finishes the in-flight page fetch, stops the scheduler, drains HTTP connections (10s) and closes the DB cleanly.
 - On startup, a site whose last run is older than its `interval` runs immediately. Otherwise it waits for its next tick. Restarts therefore don't cause a burst of fetches.
 
-**Example `compose.yaml`** (the repo will ship this):
+**`compose.yaml`** (shipped in the repo). The container config is `deploy/rss-er.yaml`, which puts the store on `/data` and logs JSON. It and `sites/` are mounted over the baked-in copies:
 
 ```yaml
 services:
   rss-er:
     image: rss-er:latest
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
     restart: unless-stopped
     environment:
       RSS_ER_PUBLIC_BASE_URL: https://rss.example.com
     volumes:
       - rss-er-data:/data
-      - ./config:/config:ro
-    expose: ["8080"]          # reverse proxy joins this network; no host port needed
+      - ./deploy/rss-er.yaml:/config/rss-er.yaml:ro
+      - ./sites:/config/sites:ro
+    expose: ["8080"] # the reverse proxy joins this network; no host port needed
 volumes:
   rss-er-data:
 ```
@@ -441,6 +445,7 @@ rss-er/
     store/       # sqlite schema + migrations, queries
     feed/        # rss + atom structs, rendering
     server/      # http handlers
+    scheduler/   # runs each site every interval, one at a time
     pipeline/    # orchestrates one site run
   sites/
     claude-blog.yaml
@@ -448,6 +453,10 @@ rss-er/
   testdata/
     claude-blog/ # saved HTML fixtures + sitemap + expected golden feed
     select-dev/  # saved posts/rss.xml (with stega chars intact) + post HTML + golden feed
+  deploy/
+    rss-er.yaml  # container config: store on /data, JSON logs
+  Dockerfile
+  compose.yaml
   PLAN.md
   README.md
   Makefile

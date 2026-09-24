@@ -1,0 +1,7 @@
+.git
+.roborev
+bin
+out
+*.db
+*.db-wal
+*.db-shm

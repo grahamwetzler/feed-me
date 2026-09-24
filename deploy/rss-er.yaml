@@ -1,0 +1,21 @@
+# Container config (PLAN.md §8.1). The image bakes this in at /config/rss-er.yaml
+# with the shipped sites in /config/sites; compose.yaml mounts the repo's
+# copies over both, so editing a site needs only a restart.
+sites_dir: sites
+store_path: /data/rss-er.db
+listen: ":8080"
+
+# Set RSS_ER_PUBLIC_BASE_URL instead of editing this; it wins over the file.
+public_base_url: http://localhost:8080
+base_path: /
+
+# Appended to the User-Agent: rss-er/<version> (+<contact_url>)
+# contact_url: https://example.com/rss-er
+
+log:
+  format: json
+  level: info
+
+fetch:
+  rate: 1/s
+  timeout: 20s
