@@ -333,7 +333,7 @@ func (r *Runner) apply(ctx context.Context, site *config.Site, t target, resp *f
 		// a move is still detected when the date comes back.
 		it.SourcePublished = existing.SourcePublished
 	}
-	if existing.SourcePublished != "" && it.SourcePublished != "" && it.SourcePublished != existing.SourcePublished {
+	if existing.SourcePublished != "" && it.SourcePublished != existing.SourcePublished {
 		// The site itself moved the publish date to another day (§5.3): the one
 		// case where a frozen timestamp is recomputed.
 		it.Published, it.PublishedSource = publishedAt(res, existing.FirstSeen, t.cand.Order, site.Schedule.Location)
