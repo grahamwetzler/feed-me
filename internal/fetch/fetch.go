@@ -11,7 +11,9 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -83,11 +85,12 @@ func UserAgent(version, contactURL string) string {
 	return fmt.Sprintf("%s/%s (+%s)", Product, version, contactURL)
 }
 
-// NewClient returns a Client. A nil httpClient uses a fresh http.Client whose
+// NewClient returns a Client. A nil httpClient uses a fresh http.Client that
+// connects only to public addresses (PublicOnlyTransport) and whose
 // per-request timeouts come from each site's Options.
 func NewClient(httpClient *http.Client, userAgent string, maxBodyBytes int64, log *slog.Logger) *Client {
 	if httpClient == nil {
-		httpClient = &http.Client{}
+		httpClient = &http.Client{Transport: PublicOnlyTransport()}
 	}
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
@@ -116,6 +119,19 @@ type Options struct {
 	Timeout       time.Duration
 	Headers       map[string]string
 	RespectRobots bool
+
+	// HeaderHosts are the hosts (host[:port], as in a URL) that receive
+	// Headers. Discovery follows links that remote content chooses, so a
+	// site's headers, which may hold credentials, go only to its own hosts.
+	HeaderHosts []string
+}
+
+// headersFor returns the configured headers that a request to u may carry.
+func (o Options) headersFor(u *url.URL) map[string]string {
+	if slices.ContainsFunc(o.HeaderHosts, func(h string) bool { return strings.EqualFold(h, u.Host) }) {
+		return o.Headers
+	}
+	return nil
 }
 
 // Site returns a Fetcher bound to one site's options.
@@ -198,7 +214,8 @@ func retryable(err error) bool {
 	}
 	var tb *tooBigError
 	var re *redirectError
-	return !errors.As(err, &tb) && !errors.As(err, &re) && !errors.Is(err, ErrDisallowed) &&
+	var be *BlockedAddressError
+	return !errors.As(err, &tb) && !errors.As(err, &re) && !errors.As(err, &be) && !errors.Is(err, ErrDisallowed) &&
 		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }
 
@@ -222,7 +239,7 @@ func (c *Client) once(ctx context.Context, req Request, o Options) (*Response, t
 	if err != nil {
 		return nil, 0, err
 	}
-	for k, v := range o.Headers {
+	for k, v := range o.headersFor(hr.URL) {
 		hr.Header.Set(k, v)
 	}
 	hr.Header.Set("User-Agent", c.UserAgent)
@@ -303,18 +320,16 @@ func (c *Client) client(o Options) *http.Client {
 		if r.URL.Scheme != "http" && r.URL.Scheme != "https" {
 			return &redirectError{fmt.Sprintf("redirect to non-http(s) URL %s", r.URL)}
 		}
-		if o.RespectRobots {
-			// net/http has already dropped Authorization, Cookie and the like
-			// from r if the redirect leaves the original domain; the robots.txt
-			// lookup must not send them there either.
-			ro := o
-			ro.Headers = map[string]string{}
-			for k, v := range o.Headers {
-				if r.Header.Get(k) != "" {
-					ro.Headers[k] = v
-				}
+		// net/http copies the first request's headers onto each hop and drops
+		// only Authorization, Cookie and the like when the domain changes.
+		// Configured headers follow the same host rule as a fresh request.
+		if o.headersFor(r.URL) == nil {
+			for k := range o.Headers {
+				r.Header.Del(k)
 			}
-			ok, err := c.robots.allowed(r.Context(), r.URL, ro)
+		}
+		if o.RespectRobots {
+			ok, err := c.robots.allowed(r.Context(), r.URL, o)
 			if err != nil {
 				return fmt.Errorf("robots.txt for %s: %w", r.URL.Host, err)
 			}

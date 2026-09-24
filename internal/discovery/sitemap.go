@@ -36,6 +36,7 @@ func fromSitemap(ctx context.Context, f fetch.Fetcher, root string) ([]Candidate
 	var out []Candidate
 	visited := map[string]bool{}
 	children := 0
+	var allowed site
 	var walk func(u string, depth int) error
 	walk = func(u string, depth int) error {
 		if visited[u] {
@@ -45,6 +46,9 @@ func fromSitemap(ctx context.Context, f fetch.Fetcher, root string) ([]Candidate
 		resp, err := f.Fetch(ctx, fetch.Request{URL: u})
 		if err != nil {
 			return err
+		}
+		if allowed == nil {
+			allowed = siteOf(root, resp.URL)
 		}
 		doc, err := parseSitemap(resp.Body)
 		if err != nil {
@@ -67,7 +71,11 @@ func fromSitemap(ctx context.Context, f fetch.Fetcher, root string) ([]Candidate
 				if children++; children > maxChildSitemaps {
 					return fmt.Errorf("more than %d child sitemaps", maxChildSitemaps)
 				}
-				if err := walk(cleanURL(x.Loc), depth+1); err != nil {
+				child := cleanURL(x.Loc)
+				if err := allowed.check("child sitemap", child); err != nil {
+					return fmt.Errorf("%s: %w", u, err)
+				}
+				if err := walk(child, depth+1); err != nil {
 					return err
 				}
 			}

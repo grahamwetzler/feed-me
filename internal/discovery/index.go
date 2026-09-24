@@ -19,12 +19,21 @@ import (
 func fromIndex(ctx context.Context, f fetch.Fetcher, d *config.Discovery) ([]Candidate, error) {
 	var out []Candidate
 	seen := map[string]bool{}
+	var allowed site
 	next := d.URL
 	for page := 0; page < d.MaxPages && next != "" && !seen[next]; page++ {
 		seen[next] = true
+		if allowed != nil {
+			if err := allowed.check("next page", next); err != nil {
+				return nil, err
+			}
+		}
 		resp, err := f.Fetch(ctx, fetch.Request{URL: next})
 		if err != nil {
 			return nil, err
+		}
+		if allowed == nil {
+			allowed = siteOf(d.URL, resp.URL)
 		}
 		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(resp.Body))
 		if err != nil {

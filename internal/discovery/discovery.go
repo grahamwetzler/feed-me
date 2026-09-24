@@ -81,6 +81,40 @@ func cleanURL(raw string) string {
 	return u.String()
 }
 
+// site is the set of hosts a strategy may traverse: the host of its
+// configured URL, plus wherever that first request redirected to. Sitemap
+// children and next pages come from remote content, so without this a
+// compromised site could send feed-me anywhere.
+type site []string
+
+func siteOf(configured, final string) site {
+	var s site
+	for _, raw := range []string{configured, final} {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" && !s.has(u.Host) {
+			s = append(s, u.Host)
+		}
+	}
+	return s
+}
+
+func (s site) has(host string) bool {
+	for _, h := range s {
+		if strings.EqualFold(h, host) {
+			return true
+		}
+	}
+	return false
+}
+
+// check returns an error unless raw is on one of the site's hosts.
+func (s site) check(what, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || !s.has(u.Host) {
+		return fmt.Errorf("%s %q is not on %s; refusing to follow it off-site", what, raw, strings.Join(s, " or "))
+	}
+	return nil
+}
+
 // resolve makes ref absolute against base.
 func resolve(base *url.URL, ref string) string {
 	r, err := url.Parse(strings.TrimSpace(ref))

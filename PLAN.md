@@ -106,6 +106,7 @@ I inspected the site on 2026-09-23. It's different from the Claude blog: it **ha
    - Retries with jittered backoff on 429 and 5xx, honoring `Retry-After`.
    - An honest User-Agent: `feed-me/<version> (+<contact URL>)`.
    - Response size cap and timeouts.
+   - Connections only to public addresses (§3.3).
 3. **Extractor** works out each field from an ordered list of *sources*. The first source that returns a non-empty value wins:
    - `jsonld:<path>`: for example `jsonld:BlogPosting.datePublished`. It handles `@graph` arrays and multiple scripts.
    - `meta:<name|property>`: for example `meta:article:published_time`.
@@ -125,6 +126,14 @@ I inspected the site on 2026-09-23. It's different from the Claude blog: it **ha
   - Items published within the last `refresh_window` (default 14 days), to pick up edits. These use conditional GETs, so they're cheap when nothing changed.
   - Anything whose sitemap `lastmod` moved forward, if `trust_lastmod: true`. The default is false.
 - An item that disappears from discovery is **kept**. Feeds shouldn't lose history because of a sitemap hiccup. The item is marked `missing_since` and can be pruned after a configurable age.
+
+### 3.3 Outbound requests
+
+Discovery follows URLs that remote content chooses: sitemap children, "next" links, feed items and redirects. A compromised or hostile site could point those at feed-me's own network, so the fetcher limits where requests go:
+
+- **Public addresses only.** The dialer checks the IP it is about to connect to, after DNS resolution, so a hostname that resolves to a private address is caught, and so is every redirect hop and `robots.txt` lookup. Loopback, RFC 1918, link-local (including the `169.254.169.254` metadata endpoint), carrier-grade NAT, unique-local IPv6, multicast and reserved ranges are refused, and the fetch is not retried. HTTP proxies from the environment are ignored, since a proxy would hide the real destination. Set `fetch.allow_private_networks: true` in `feed-me.yaml` to turn the check off, for a site on your LAN or a local test server.
+- **Traversal stays on the site.** Sitemap children and index "next" pages must be on the host of the strategy's `url`, or on the host that first request redirected to. An off-site one fails the run, like any other discovery error. Article URLs are filtered by `include`/`exclude` as before.
+- **Headers go only to the site's hosts.** A site's `fetch.headers` are sent only to the hosts named by its discovery URLs, matched exactly (`example.com` is not `www.example.com`). They are removed from any redirect hop or fresh request to another host, including that host's `robots.txt`.
 
 ---
 
@@ -161,7 +170,7 @@ schedule:
 fetch:
   rate: 1/s
   timeout: 20s
-  headers: {}               # extra request headers if a site needs them
+  headers: {}               # extra request headers, sent only to the discovery URLs' hosts (§3.3)
   respect_robots: true
 
 discovery:

@@ -61,7 +61,7 @@ func (r *robotsCache) get(ctx context.Context, u *url.URL, o Options) (*robotstx
 	origin := u.Scheme + "://" + u.Host
 	// The answer can depend on the headers sent (credentials, say), so
 	// lookups with different headers don't share a cache entry.
-	key := origin + "\x00" + headersKey(o.Headers)
+	key := origin + "\x00" + headersKey(o.headersFor(u))
 	r.mu.Lock()
 	e, ok := r.m[key]
 	r.mu.Unlock()

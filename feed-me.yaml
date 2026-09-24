@@ -18,3 +18,6 @@ log:
 fetch:
   rate: 1/s
   timeout: 20s
+  # Fetches reach only public addresses (PLAN.md §3.3). Allow private ones
+  # for a site on your LAN or a local test server:
+  # allow_private_networks: true

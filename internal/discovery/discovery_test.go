@@ -200,6 +200,68 @@ func TestIndexDiscovery(t *testing.T) {
 	}
 }
 
+func TestSitemapStaysOnSite(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "index.xml"), `<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<sitemap><loc>https://www.example.com/s1.xml</loc></sitemap>
+<sitemap><loc>http://169.254.169.254/latest/meta-data/</loc></sitemap></sitemapindex>`)
+	writeFile(t, filepath.Join(dir, "s1.xml"), `<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://www.example.com/a</loc></url></urlset>`)
+	tr := &fetchtest.Transport{Files: map[string]string{
+		// The root redirects to www, which makes www part of the site.
+		"https://www.example.com/sitemap.xml": filepath.Join(dir, "index.xml"),
+		"https://www.example.com/s1.xml":      filepath.Join(dir, "s1.xml"),
+	}}
+	redirecting := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.String() == "https://example.com/sitemap.xml" {
+			return &http.Response{StatusCode: http.StatusMovedPermanently, Request: r, Body: http.NoBody,
+				Header: http.Header{"Location": {"https://www.example.com/sitemap.xml"}}}, nil
+		}
+		return tr.RoundTrip(r)
+	})
+	c := fetch.NewClient(&http.Client{Transport: redirecting}, "feed-me/test", 1<<20, nil)
+	f := c.Site(fetch.Options{Rate: 1000})
+
+	_, err := fromSitemap(context.Background(), f, "https://example.com/sitemap.xml")
+	if err == nil || !strings.Contains(err.Error(), "169.254.169.254") || !strings.Contains(err.Error(), "off-site") {
+		t.Errorf("err = %v, want the off-site child refused", err)
+	}
+	if tr.Count("https://www.example.com/s1.xml") != 1 {
+		t.Error("the on-site child (on the redirected-to host) was not fetched")
+	}
+	if n := tr.Count("http://169.254.169.254/latest/meta-data/"); n != 0 {
+		t.Errorf("off-site child fetched %d times", n)
+	}
+}
+
+func TestIndexNextPageStaysOnSite(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "p1.html"), `<html><body><div class="card"><a href="/posts/a">A</a></div>
+<a class="next" href="http://10.0.0.5:8080/admin">Next</a></body></html>`)
+	d := config.Discovery{Type: "index", URL: "https://example.com/blog", MaxPages: 5}
+	d.LinkSelector.Matcher, _ = cascadia.Compile(".card")
+	d.NextSelector.Matcher, _ = cascadia.Compile("a.next")
+	f, tr := fetcher(map[string]string{"https://example.com/blog": filepath.Join(dir, "p1.html")})
+
+	_, err := fromIndex(context.Background(), f, &d)
+	if err == nil || !strings.Contains(err.Error(), "10.0.0.5:8080") || !strings.Contains(err.Error(), "off-site") {
+		t.Errorf("err = %v, want the off-site next page refused", err)
+	}
+	if n := tr.Count("http://10.0.0.5:8080/admin"); n != 0 {
+		t.Errorf("off-site next page fetched %d times", n)
+	}
+
+	// On the last page allowed, the off-site link would not be followed anyway.
+	d.MaxPages = 1
+	if cands, err := fromIndex(context.Background(), f, &d); err != nil || len(cands) != 1 {
+		t.Errorf("max_pages 1: %d candidates, err %v", len(cands), err)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func writeFile(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

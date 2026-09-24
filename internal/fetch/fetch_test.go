@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,6 +22,13 @@ func newTestClient(srv *httptest.Server) *Client {
 
 var fast = Options{Rate: 1000, Timeout: 5 * time.Second, RespectRobots: true}
 
+// withHeaders returns o sending h to srv's host.
+func withHeaders(o Options, srv *httptest.Server, h map[string]string) Options {
+	o.Headers = h
+	o.HeaderHosts = []string{strings.TrimPrefix(srv.URL, "http://")}
+	return o
+}
+
 func TestFetchSetsUserAgentAndHeaders(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/robots.txt" {
@@ -32,8 +40,7 @@ func TestFetchSetsUserAgentAndHeaders(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	o := fast
-	o.Headers = map[string]string{"X-Extra": "yes", "User-Agent": "spoofed"}
+	o := withHeaders(fast, srv, map[string]string{"X-Extra": "yes", "User-Agent": "spoofed"})
 	resp, err := newTestClient(srv).Site(o).Fetch(context.Background(), Request{URL: srv.URL + "/a"})
 	if err != nil {
 		t.Fatal(err)
@@ -229,13 +236,26 @@ func TestRedirectsWaitForDestinationHost(t *testing.T) {
 	}
 }
 
-func TestRedirectToAnotherDomainDropsCredentials(t *testing.T) {
-	type seen struct{ host, path, auth, cookie, extra string }
+// multiHostClient dials srv for every hostname, so requests really cross
+// hosts as far as net/http is concerned.
+func multiHostClient(srv *httptest.Server) *Client {
+	addr := srv.Listener.Addr().String()
+	hc := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, addr)
+	}}}
+	return NewClient(hc, "ua", 1<<10, nil)
+}
+
+type seenReq struct{ host, path, auth, cookie, extra string }
+
+// recordingServer answers 404 for robots.txt, redirects src.test to
+// dst.test/a, and serves "ok" otherwise, recording every request.
+func recordingServer(t *testing.T) (*httptest.Server, func() []seenReq) {
 	var mu sync.Mutex
-	var reqs []seen
+	var reqs []seenReq
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		reqs = append(reqs, seen{r.Host, r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("Cookie"), r.Header.Get("X-Extra")})
+		reqs = append(reqs, seenReq{r.Host, r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("Cookie"), r.Header.Get("X-Extra")})
 		mu.Unlock()
 		switch {
 		case r.URL.Path == "/robots.txt":
@@ -246,36 +266,61 @@ func TestRedirectToAnotherDomainDropsCredentials(t *testing.T) {
 			_, _ = w.Write([]byte("ok"))
 		}
 	}))
-	defer srv.Close()
-	// Every hostname dials the one test server, so the redirect really
-	// crosses domains as far as net/http is concerned.
-	addr := srv.Listener.Addr().String()
-	hc := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, network, addr)
-	}}}
-	c := NewClient(hc, "ua", 1<<10, nil)
-	o := fast
-	o.Headers = map[string]string{"Authorization": "Bearer secret", "Cookie": "s=1", "X-Extra": "yes"}
-	if _, err := c.Site(o).Fetch(context.Background(), Request{URL: "http://src.test/r"}); err != nil {
-		t.Fatal(err)
+	t.Cleanup(srv.Close)
+	return srv, func() []seenReq {
+		mu.Lock()
+		defer mu.Unlock()
+		return slices.Clone(reqs)
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	var dstRobots bool
+}
+
+var siteHeaders = map[string]string{"Authorization": "Bearer secret", "Cookie": "s=1", "X-Extra": "yes"}
+
+// checkHeaders fails if a request to src.test lacks the site's headers or a
+// request to any other host carries one; it returns the paths seen on dst.test.
+func checkHeaders(t *testing.T, reqs []seenReq) (dstPaths []string) {
+	t.Helper()
 	for _, r := range reqs {
-		if !strings.HasPrefix(r.host, "dst.test") {
+		if strings.HasPrefix(r.host, "src.test") {
+			if r.auth == "" || r.extra == "" {
+				t.Errorf("%s%s lost the site's headers: %+v", r.host, r.path, r)
+			}
 			continue
 		}
-		dstRobots = dstRobots || r.path == "/robots.txt"
-		if r.auth != "" || r.cookie != "" {
-			t.Errorf("%s%s received credentials: %+v", r.host, r.path, r)
-		}
-		if r.extra != "yes" {
-			t.Errorf("%s%s lost the non-sensitive header: %+v", r.host, r.path, r)
+		dstPaths = append(dstPaths, r.path)
+		if r.auth != "" || r.cookie != "" || r.extra != "" {
+			t.Errorf("%s%s received the site's headers: %+v", r.host, r.path, r)
 		}
 	}
-	if !dstRobots {
-		t.Errorf("destination robots.txt never checked: %+v", reqs)
+	return dstPaths
+}
+
+func TestRedirectToAnotherHostDropsConfiguredHeaders(t *testing.T) {
+	srv, reqs := recordingServer(t)
+	o := fast
+	o.Headers, o.HeaderHosts = siteHeaders, []string{"src.test"}
+	if _, err := multiHostClient(srv).Site(o).Fetch(context.Background(), Request{URL: "http://src.test/r"}); err != nil {
+		t.Fatal(err)
+	}
+	if dst := checkHeaders(t, reqs()); !slices.Contains(dst, "/robots.txt") || !slices.Contains(dst, "/a") {
+		t.Errorf("dst.test requests = %v, want its robots.txt and /a", dst)
+	}
+}
+
+func TestHeadersGoOnlyToHeaderHosts(t *testing.T) {
+	// A sitemap child or next page on another host is a fresh request, not a
+	// redirect, so net/http's own stripping never applies.
+	srv, reqs := recordingServer(t)
+	o := fast
+	o.Headers, o.HeaderHosts = siteHeaders, []string{"SRC.test"} // hosts compare case-insensitively
+	f := multiHostClient(srv).Site(o)
+	for _, u := range []string{"http://src.test/robots.txt", "http://dst.test/b"} {
+		if _, err := f.Fetch(context.Background(), Request{URL: u}); err != nil && !strings.Contains(err.Error(), "404") {
+			t.Fatal(err)
+		}
+	}
+	if dst := checkHeaders(t, reqs()); len(dst) != 2 {
+		t.Errorf("dst.test requests = %v, want its robots.txt and /b", dst)
 	}
 }
 
@@ -299,8 +344,7 @@ func TestRobotsCacheIsPerHeaderSet(t *testing.T) {
 	if _, err := c.Site(fast).Fetch(ctx, Request{URL: srv.URL + "/private/x"}); err != nil {
 		t.Fatalf("anonymous: %v", err)
 	}
-	authed := fast
-	authed.Headers = map[string]string{"Authorization": "Bearer t"}
+	authed := withHeaders(fast, srv, map[string]string{"Authorization": "Bearer t"})
 	if _, err := c.Site(authed).Fetch(ctx, Request{URL: srv.URL + "/private/x"}); !errors.Is(err, ErrDisallowed) {
 		t.Errorf("authenticated lookup reused the anonymous robots.txt: %v", err)
 	}
@@ -324,8 +368,7 @@ func TestRobotsCacheDropsExpiredEntries(t *testing.T) {
 	ctx := context.Background()
 	fetch := func(token string) {
 		t.Helper()
-		o := fast
-		o.Headers = map[string]string{"Authorization": "Bearer " + token}
+		o := withHeaders(fast, srv, map[string]string{"Authorization": "Bearer " + token})
 		if _, err := c.Site(o).Fetch(ctx, Request{URL: srv.URL + "/x"}); err != nil {
 			t.Fatal(err)
 		}

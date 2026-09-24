@@ -30,6 +30,11 @@ type GlobalFetch struct {
 	Rate         Rate     `yaml:"rate"`
 	Timeout      Duration `yaml:"timeout"`
 	MaxBodyBytes int64    `yaml:"max_body_bytes"`
+
+	// AllowPrivateNetworks lets fetches reach loopback, private and other
+	// non-public addresses, for sites on a LAN or a local test server. Off by
+	// default: discovery follows URLs that remote content chooses.
+	AllowPrivateNetworks bool `yaml:"allow_private_networks"`
 }
 
 const (
