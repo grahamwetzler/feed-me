@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -73,7 +74,7 @@ func (r *Rate) compile() error {
 		return fmt.Errorf("invalid rate %q (want N/unit, e.g. 1/s, 30/m, 1/2s)", r.Raw)
 	}
 	n, err := strconv.ParseFloat(strings.TrimSpace(num), 64)
-	if err != nil || n <= 0 {
+	if err != nil || !(n > 0) || math.IsInf(n, 0) {
 		return fmt.Errorf("invalid rate %q: count must be a positive number", r.Raw)
 	}
 	per = strings.TrimSpace(per)
@@ -86,6 +87,9 @@ func (r *Rate) compile() error {
 		return fmt.Errorf("invalid rate %q: unit must be s, m, h or a duration", r.Raw)
 	}
 	r.PerSecond = n / d.Seconds()
+	if !(r.PerSecond > 0) || math.IsInf(r.PerSecond, 0) {
+		return fmt.Errorf("invalid rate %q: out of range", r.Raw)
+	}
 	return nil
 }
 

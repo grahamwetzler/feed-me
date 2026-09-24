@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/http/httpguts"
 	"gopkg.in/yaml.v3"
 )
 
@@ -138,6 +140,13 @@ func decodeStrict(path string, v any) (*yaml.Node, Errors) {
 		if errors.As(err, &te) {
 			return &root, yamlErrors(path, err)
 		}
+		return nil, yamlErrors(path, err)
+	}
+	// A second document would otherwise be silently ignored.
+	var extra yaml.Node
+	if err := dec.Decode(&extra); err == nil {
+		return nil, Errors{{File: path, Line: extra.Line, Msg: "only one YAML document is allowed (found another after ---)"}}
+	} else if !errors.Is(err, io.EOF) {
 		return nil, yamlErrors(path, err)
 	}
 	return &root, nil
@@ -398,9 +407,11 @@ func LoadSite(path string, g *Global) (*Site, Errors) {
 	} else if err := s.Fetch.Timeout.compile(); err != nil {
 		v.errAt(s.Fetch.Timeout.Line, p("fetch", "timeout"), "%v", err)
 	}
-	for k := range s.Fetch.Headers {
-		if strings.TrimSpace(k) == "" || strings.ContainsAny(k, " :\r\n") {
+	for k, val := range s.Fetch.Headers {
+		if !httpguts.ValidHeaderFieldName(k) {
 			v.err(p("fetch", "headers"), "invalid header name %q", k)
+		} else if !httpguts.ValidHeaderFieldValue(val) {
+			v.err(p("fetch", "headers", k), "invalid header value %q (no control characters or newlines)", val)
 		}
 	}
 

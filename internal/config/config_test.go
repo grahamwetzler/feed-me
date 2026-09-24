@@ -65,7 +65,7 @@ func TestRate(t *testing.T) {
 			t.Errorf("%q: got %v, %v; want %v", raw, r.PerSecond, err, want)
 		}
 	}
-	for _, raw := range []string{"1", "0/s", "-1/s", "1/x", "a/s", "1/0s"} {
+	for _, raw := range []string{"1", "0/s", "-1/s", "1/x", "a/s", "1/0s", "NaN/s", "Inf/s", "+Inf/s", "1e308/1ns", "5e-324/1h"} {
 		r := Rate{Raw: raw}
 		if err := r.compile(); err == nil {
 			t.Errorf("%q: want error", raw)
@@ -258,5 +258,43 @@ func TestLineOf(t *testing.T) {
 		if got := lineOf(s.root, tt.path...); got != tt.line {
 			t.Errorf("%v: got %d, want %d", tt.path, got, tt.line)
 		}
+	}
+}
+
+func TestRejectsMultipleDocuments(t *testing.T) {
+	g, sp := writeSite(t, "multi.yaml", `id: multi
+version: 1
+channel: {title: T, link: https://example.com, description: D}
+discovery: [{type: links, urls: [https://example.com/a]}]
+item: {title: [css:h1], content: {selector: article}}
+---
+id: ignored
+`)
+	gl, err := LoadGlobal(g)
+	must(t, err)
+	_, errs := LoadSite(sp, gl)
+	if len(errs) != 1 || !strings.Contains(errs[0].Msg, "only one YAML document") || errs[0].Line != 6 {
+		t.Fatalf("got %v", errs)
+	}
+}
+
+func TestHeaderValidation(t *testing.T) {
+	g, sp := writeSite(t, "hdr.yaml", `id: hdr
+version: 1
+channel: {title: T, link: https://example.com, description: D}
+fetch:
+  headers:
+    X@Test: a
+    X-Block: |
+      value
+discovery: [{type: links, urls: [https://example.com/a]}]
+item: {title: [css:h1], content: {selector: article}}
+`)
+	gl, err := LoadGlobal(g)
+	must(t, err)
+	_, errs := LoadSite(sp, gl)
+	msgs := errs.Error()
+	if len(errs) != 2 || !strings.Contains(msgs, `invalid header name "X@Test"`) || !strings.Contains(msgs, "invalid header value") {
+		t.Fatalf("got %v", errs)
 	}
 }
