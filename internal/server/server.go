@@ -32,6 +32,8 @@ type Server struct {
 	store     *store.Store
 	generator string
 	log       *slog.Logger
+	formats   []pipeline.Format
+	now       func() time.Time // replaceable in tests
 
 	mu    sync.RWMutex
 	feeds map[string]*rendered // by path below base_path, e.g. feeds/x.xml
@@ -45,19 +47,19 @@ type rendered struct {
 }
 
 func New(g *config.Global, sites []*config.Site, st *store.Store, generator string, log *slog.Logger) *Server {
-	return &Server{global: g, sites: sites, store: st, generator: generator, log: log, feeds: map[string]*rendered{}}
+	return &Server{global: g, sites: sites, store: st, generator: generator, log: log,
+		formats: pipeline.Formats, now: time.Now, feeds: map[string]*rendered{}}
 }
 
 // Refresh re-renders every format of a site's feed from the store. A feed
 // that renders empty or fails its checks is not published; the last good one
 // keeps being served (§8.1, observability).
+//
+// Last-Modified moves whenever the bytes do, not only when items change: a
+// config edit or a new version can change a feed without a new item.
 func (s *Server) Refresh(ctx context.Context, site *config.Site) error {
-	state, err := s.store.SiteState(ctx, site.ID)
-	if err != nil {
-		return err
-	}
 	var errs []string
-	for _, f := range pipeline.Formats {
+	for _, f := range s.formats {
 		path := pipeline.FeedPath(site.ID, f)
 		data, n, err := pipeline.Render(ctx, s.store, s.global, site, s.generator, f)
 		switch {
@@ -73,8 +75,11 @@ func (s *Server) Refresh(ctx context.Context, site *config.Site) error {
 			continue
 		}
 		sum := sha256.Sum256(data)
-		r := &rendered{data: data, etag: `"` + hex.EncodeToString(sum[:16]) + `"`, modified: state.LastChange, ctype: f.ContentType}
+		r := &rendered{data: data, etag: `"` + hex.EncodeToString(sum[:16]) + `"`, modified: s.now(), ctype: f.ContentType}
 		s.mu.Lock()
+		if prev := s.feeds[path]; prev != nil && prev.etag == r.etag {
+			r.modified = prev.modified
+		}
 		s.feeds[path] = r
 		s.mu.Unlock()
 	}
@@ -84,22 +89,23 @@ func (s *Server) Refresh(ctx context.Context, site *config.Site) error {
 	return nil
 }
 
-// Handler serves everything below base_path.
+// Handler serves everything below base_path; any other path is a 404.
 func (s *Server) Handler() http.Handler {
+	base := s.global.BasePath // starts and ends with /
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /feeds/{file}", s.serveFeed)
-	mux.HandleFunc("GET /feeds.opml", s.serveOPML)
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET "+base+"feeds/{file}", s.serveFeed)
+	mux.HandleFunc("GET "+base+"feeds.opml", s.serveOPML)
+	mux.HandleFunc("GET "+base+"healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		fmt.Fprintln(w, "ok")
 	})
-	mux.HandleFunc("GET /readyz", s.serveReady)
-	mux.HandleFunc("GET /{$}", s.serveIndex)
-	prefix := strings.TrimSuffix(s.global.BasePath, "/")
-	if prefix == "" {
-		return mux
+	mux.HandleFunc("GET "+base+"readyz", s.serveReady)
+	mux.HandleFunc("GET "+base+"{$}", s.serveIndex)
+	if base != "/" {
+		// The bare prefix goes to the index, staying inside base_path.
+		mux.Handle("GET "+strings.TrimSuffix(base, "/"), http.RedirectHandler(base, http.StatusMovedPermanently))
 	}
-	return http.StripPrefix(prefix, mux)
+	return mux
 }
 
 func (s *Server) serveFeed(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +132,7 @@ func (s *Server) serveFeed(w http.ResponseWriter, r *http.Request) {
 // known reports whether file names a configured site's feed.
 func (s *Server) known(file string) bool {
 	for _, site := range s.sites {
-		for _, f := range pipeline.Formats {
+		for _, f := range s.formats {
 			if file == site.ID+f.Ext {
 				return true
 			}
@@ -135,25 +141,39 @@ func (s *Server) known(file string) bool {
 	return false
 }
 
-// serveReady answers 200 once every site has completed a successful run (§8.1).
+// serveReady answers 200 once every site has completed a successful run
+// (§8.1) and every one of its feeds can be served.
 func (s *Server) serveReady(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	var waiting []string
 	for _, site := range s.sites {
 		st, err := s.store.SiteState(r.Context(), site.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			s.log.Error("readyz: reading site state", "site", site.ID, "err", err)
+			http.Error(w, "store unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		if st.LastSuccess.IsZero() {
+		if st.LastSuccess.IsZero() || !s.served(site.ID) {
 			waiting = append(waiting, site.ID)
 		}
 	}
 	if len(waiting) > 0 {
-		http.Error(w, "waiting for a first successful run: "+strings.Join(waiting, ", "), http.StatusServiceUnavailable)
+		http.Error(w, "waiting for a successful run and feed: "+strings.Join(waiting, ", "), http.StatusServiceUnavailable)
 		return
 	}
 	fmt.Fprintln(w, "ready")
+}
+
+// served reports whether every format of a site's feed is cached.
+func (s *Server) served(siteID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, f := range s.formats {
+		if s.feeds[pipeline.FeedPath(siteID, f)] == nil {
+			return false
+		}
+	}
+	return true
 }
 
 // FeedURL is the public URL of a site's feed.

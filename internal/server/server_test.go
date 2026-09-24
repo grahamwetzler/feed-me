@@ -11,10 +11,13 @@ import (
 	"time"
 
 	"rss-er/internal/config"
+	"rss-er/internal/feed"
+	"rss-er/internal/pipeline"
 	"rss-er/internal/store"
 )
 
 type fixture struct {
+	clock time.Time
 	srv   *Server
 	site  *config.Site
 	store *store.Store
@@ -43,7 +46,9 @@ func newFixture(t *testing.T, basePath string) *fixture {
 	}))
 	must(t, st.PutSiteState(ctx, site.ID, store.SiteState{LastRun: at, LastChange: at}))
 	srv := New(g, []*config.Site{site}, st, "rss-er/test", slog.New(slog.DiscardHandler))
-	return &fixture{srv: srv, site: site, store: st, h: srv.Handler()}
+	f := &fixture{clock: at.Add(time.Hour), srv: srv, site: site, store: st, h: srv.Handler()}
+	srv.now = func() time.Time { return f.clock }
+	return f
 }
 
 func (f *fixture) get(t *testing.T, path string, hdr ...string) *httptest.ResponseRecorder {
@@ -82,14 +87,14 @@ func TestFeedsWithConditionalGET(t *testing.T) {
 		if w.Code != http.StatusOK || w.Header().Get("Content-Type") != ctype || !strings.Contains(w.Body.String(), "A post") {
 			t.Fatalf("%s: %d %q\n%s", path, w.Code, w.Header().Get("Content-Type"), w.Body)
 		}
-		if w.Header().Get("Cache-Control") != CacheControl || w.Header().Get("Last-Modified") != "Sun, 20 Sep 2026 16:00:00 GMT" {
+		if w.Header().Get("Cache-Control") != CacheControl || w.Header().Get("Last-Modified") != "Sun, 20 Sep 2026 17:00:00 GMT" {
 			t.Errorf("%s: headers %v", path, w.Header())
 		}
 		etag := w.Header().Get("ETag")
 		if w := f.get(t, path, "If-None-Match", etag); w.Code != http.StatusNotModified {
 			t.Errorf("%s: If-None-Match: %d, want 304", path, w.Code)
 		}
-		if w := f.get(t, path, "If-Modified-Since", "Sun, 20 Sep 2026 16:00:00 GMT"); w.Code != http.StatusNotModified {
+		if w := f.get(t, path, "If-Modified-Since", "Sun, 20 Sep 2026 17:00:00 GMT"); w.Code != http.StatusNotModified {
 			t.Errorf("%s: If-Modified-Since: %d, want 304", path, w.Code)
 		}
 		if w := f.get(t, path, "If-None-Match", `"stale"`); w.Code != http.StatusOK {
@@ -121,6 +126,11 @@ func TestReadyAfterFirstSuccessfulRun(t *testing.T) {
 		t.Errorf("readyz before a successful run: %d %s", w.Code, w.Body)
 	}
 	must(t, f.store.PutSiteState(context.Background(), f.site.ID, store.SiteState{LastSuccess: time.Now()}))
+	// A successful run on record isn't enough after a restart: the feeds must be servable.
+	if w := f.get(t, "/readyz"); w.Code != http.StatusServiceUnavailable {
+		t.Errorf("readyz with a successful run but no feed: %d %s", w.Code, w.Body)
+	}
+	must(t, f.srv.Refresh(context.Background(), f.site))
 	if w := f.get(t, "/readyz"); w.Code != http.StatusOK {
 		t.Errorf("readyz after a successful run: %d %s", w.Code, w.Body)
 	}
@@ -149,7 +159,69 @@ func TestBasePathIndexAndOPML(t *testing.T) {
 			t.Errorf("index: %d, missing %s\n%s", w.Code, want, w.Body)
 		}
 	}
-	if w := f.get(t, "/rss/nope"); w.Code != http.StatusNotFound {
-		t.Errorf("unknown path: %d, want 404", w.Code)
+	for _, path := range []string{"/rss/nope", "/rssfeeds/claude-blog.xml", "/rsshealthz", "/healthz"} {
+		if w := f.get(t, path); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404", path, w.Code)
+		}
+	}
+	if w := f.get(t, "/rss"); w.Code != http.StatusMovedPermanently || w.Header().Get("Location") != "/rss/" {
+		t.Errorf("bare base_path: %d to %q, want a redirect to /rss/", w.Code, w.Header().Get("Location"))
+	}
+}
+
+func TestLastModifiedFollowsContent(t *testing.T) {
+	f := newFixture(t, "/")
+	ctx := context.Background()
+	must(t, f.srv.Refresh(ctx, f.site))
+	first := f.get(t, "/feeds/claude-blog.xml").Header()
+
+	f.clock = f.clock.Add(time.Hour)
+	must(t, f.srv.Refresh(ctx, f.site)) // same bytes
+	if h := f.get(t, "/feeds/claude-blog.xml").Header(); h.Get("Last-Modified") != first.Get("Last-Modified") || h.Get("ETag") != first.Get("ETag") {
+		t.Errorf("unchanged feed: Last-Modified %s → %s", first.Get("Last-Modified"), h.Get("Last-Modified"))
+	}
+
+	f.site.Channel.Title = "Renamed" // a config edit changes the bytes, not the items
+	must(t, f.srv.Refresh(ctx, f.site))
+	if h := f.get(t, "/feeds/claude-blog.xml").Header(); h.Get("Last-Modified") != "Sun, 20 Sep 2026 18:00:00 GMT" || h.Get("ETag") == first.Get("ETag") {
+		t.Errorf("changed feed: Last-Modified %s, ETag %s", h.Get("Last-Modified"), h.Get("ETag"))
+	}
+	if w := f.get(t, "/feeds/claude-blog.xml", "If-Modified-Since", first.Get("Last-Modified")); w.Code != http.StatusOK {
+		t.Errorf("If-Modified-Since the old time: %d, want 200", w.Code)
+	}
+}
+
+func TestPartialRefreshKeepsFailingFormat(t *testing.T) {
+	f := newFixture(t, "/")
+	ctx := context.Background()
+	failing := false
+	good := pipeline.RSS
+	bad := pipeline.Atom
+	bad.Check = func(data []byte) []string {
+		if failing {
+			return []string{"broken"}
+		}
+		return feed.CheckAtom(data)
+	}
+	f.srv.formats = []pipeline.Format{good, bad}
+	must(t, f.srv.Refresh(ctx, f.site))
+	oldAtom := f.get(t, "/feeds/claude-blog.atom")
+
+	failing = true
+	at := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	must(t, f.store.PutItem(ctx, &store.Item{
+		SiteID: f.site.ID, GUID: "https://claude.com/blog/b", URL: "https://claude.com/blog/b", Canonical: "https://claude.com/blog/b",
+		Title: "Newer post", ContentHTML: "<p>B</p>", Published: at, FirstSeen: at, LastFetched: at, ContentHash: "b",
+	}))
+	err := f.srv.Refresh(ctx, f.site)
+	if err == nil || !strings.Contains(err.Error(), "feeds/claude-blog.atom: failed its checks: broken") || strings.Contains(err.Error(), ".xml") {
+		t.Errorf("Refresh = %v, want an error naming only the Atom feed", err)
+	}
+	if w := f.get(t, "/feeds/claude-blog.xml"); !strings.Contains(w.Body.String(), "Newer post") {
+		t.Error("the RSS feed that passed was not updated")
+	}
+	w := f.get(t, "/feeds/claude-blog.atom")
+	if w.Body.String() != oldAtom.Body.String() || w.Header().Get("ETag") != oldAtom.Header().Get("ETag") {
+		t.Error("the Atom feed that failed replaced the last good one")
 	}
 }
