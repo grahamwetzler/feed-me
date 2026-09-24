@@ -1,0 +1,41 @@
+id: claude-dev
+version: 1
+
+channel:
+  title: claude.dev Blog
+  link: https://claude.dev/
+  description: Technical writing for people building with Claude.
+  language: en-us
+  author: Anthropic
+  ttl: 60
+
+schedule:
+  interval: 1h
+  max_items: 50
+  timezone: America/Los_Angeles
+
+discovery:
+  # No feed. The sitemap lists every post; its lastmod is a site-wide rebuild date.
+  - type: sitemap
+    url: https://claude.dev/sitemap.xml
+    include: ['^https://claude\.dev/blog/[^/?#]+/$']
+
+item:
+  title:   [jsonld:BlogPosting.headline, meta:og:title]   # og:title carries a " / claude.dev Blog" suffix
+  summary: [jsonld:BlogPosting.description, meta:description]
+  # The byline names every author; JSON-LD and the meta tags repeat per author,
+  # and a scalar source keeps only the first.
+  author:  ['css:#mAuthor', jsonld:BlogPosting.author]
+  image:   [meta:og:image]
+  categories: [jsonld:BlogPosting.articleSection]
+  published:
+    sources: [jsonld:BlogPosting.datePublished, 'css:#mDate']
+    layouts: ['Jan 2, 2006']
+  content:
+    selector: 'div.prose#body'
+    # Inline SVG diagrams (figure.art-diagram) are lost: the sanitizer drops <svg>.
+    exclude: ['script', 'style', 'noscript', 'button', '[aria-hidden="true"]',
+              '.art-code .ch',          # "CODE <lang>" label and Copy button
+              '.art-anim-still',        # the video's poster, repeated as an <img>
+              'figcaption.cap > b',     # "FIG A" / "VIDEO" labels; the prose never cites them
+              '.art-thread .tag', '.art-thread time']   # Slack mockups: "App" badge, timestamps

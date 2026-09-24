@@ -80,7 +80,7 @@ func TestRunServesFeedsAndShutsDown(t *testing.T) {
 		t.Errorf("healthcheck: exit %d: %s", code, out.String())
 	}
 
-	// Both sites are never-run, so they run at startup; ready once both succeed.
+	// Every site is never-run, so they run at startup; ready once all succeed.
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		code, body := get("readyz")
@@ -92,7 +92,8 @@ func TestRunServesFeedsAndShutsDown(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	for _, path := range []string{"feeds/claude-blog.xml", "feeds/claude-blog.atom", "feeds/select-dev.xml", "feeds/select-dev.atom"} {
+	for _, path := range []string{"feeds/claude-blog.xml", "feeds/claude-blog.atom", "feeds/select-dev.xml", "feeds/select-dev.atom",
+		"feeds/claude-dev.xml", "feeds/claude-dev.atom"} {
 		// A feed is refreshed just after its run records success, so allow a moment.
 		var code int
 		var body string

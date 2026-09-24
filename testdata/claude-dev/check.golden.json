@@ -1,0 +1,107 @@
+[
+  {
+    "url": "https://claude.dev/blog/how-we-made-claude-ai-faster/",
+    "canonical": "https://claude.dev/blog/how-we-made-claude-ai-faster/",
+    "title": "How we made claude.ai 3x faster in two weeks",
+    "summary": "Inside our performance sprint: the benchmarks Claude built, the loop each Slack thread ran, and the guardrails that let us ship 3,000 changes safely.",
+    "author": "Raymond Wang, Sam Attard, and Issac G.",
+    "image": "https://claude.dev/blog/how-we-made-claude-ai-faster/og.png",
+    "categories": [
+      "Engineering"
+    ],
+    "published": "2026-09-23T00:00:00-07:00",
+    "published_date_only": true,
+    "content_blocks": 1,
+    "content_chars": 20926,
+    "content_elements": {
+      "figure": 11,
+      "h2": 8,
+      "ol": 5,
+      "p": 67,
+      "ul": 2
+    },
+    "content_start": "This August, we made the core user experience of claude.ai and the Claude deskt…",
+    "content_sha256": "56610a150016f386",
+    "sources": {
+      "author": "css:#mAuthor",
+      "canonical": "meta:og:url",
+      "categories": "jsonld:BlogPosting.articleSection",
+      "content": "div.prose#body",
+      "image": "meta:og:image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline"
+    }
+  },
+  {
+    "url": "https://claude.dev/blog/getting-the-most-out-of-opus-5-5/",
+    "canonical": "https://claude.dev/blog/getting-the-most-out-of-opus-5-5/",
+    "title": "Getting the most out of Opus 5.5 in Claude and Claude Code",
+    "summary": "How to prompt Opus 5.5, steer a long run, and check your results in Claude apps and Claude Code.",
+    "author": "Addy Osmani",
+    "image": "https://claude.dev/blog/getting-the-most-out-of-opus-5-5/og.png",
+    "categories": [
+      "Playbooks"
+    ],
+    "published": "2026-09-22T00:00:00-07:00",
+    "published_date_only": true,
+    "content_blocks": 1,
+    "content_chars": 12698,
+    "content_elements": {
+      "figure": 4,
+      "h2": 8,
+      "h3": 18,
+      "img": 4,
+      "ol": 1,
+      "p": 69,
+      "pre": 6,
+      "ul": 6
+    },
+    "content_start": "Opus 5.5 works well with the way you already use Claude. A few things behave di…",
+    "content_sha256": "eaf77003f8145f35",
+    "sources": {
+      "author": "css:#mAuthor",
+      "canonical": "meta:og:url",
+      "categories": "jsonld:BlogPosting.articleSection",
+      "content": "div.prose#body",
+      "image": "meta:og:image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline"
+    }
+  },
+  {
+    "url": "https://claude.dev/blog/seeing-like-an-agent/",
+    "canonical": "https://claude.dev/blog/seeing-like-an-agent/",
+    "title": "Seeing like an agent: how we design tools in Claude Code",
+    "summary": "Learn how the Claude Code team designs, tests, and evolves tools by thinking from the model's point of view.",
+    "author": "Thariq Shihipar",
+    "image": "https://claude.dev/blog/seeing-like-an-agent/og.png",
+    "categories": [
+      "Agents"
+    ],
+    "published": "2026-04-10T00:00:00-07:00",
+    "published_date_only": true,
+    "content_blocks": 1,
+    "content_chars": 8830,
+    "content_elements": {
+      "figure": 3,
+      "h2": 3,
+      "h3": 5,
+      "img": 3,
+      "p": 39
+    },
+    "content_start": "One of the hardest parts about building an agent harness is constructing its to…",
+    "content_sha256": "939675807c0f91be",
+    "sources": {
+      "author": "css:#mAuthor",
+      "canonical": "meta:og:url",
+      "categories": "jsonld:BlogPosting.articleSection",
+      "content": "div.prose#body",
+      "image": "meta:og:image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline"
+    }
+  }
+]

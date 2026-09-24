@@ -94,7 +94,7 @@ func TestLoadShippedConfigs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Sites) != 2 {
+	if len(cfg.Sites) != 3 {
 		t.Fatalf("got %d sites", len(cfg.Sites))
 	}
 	cb := cfg.Site("claude-blog")

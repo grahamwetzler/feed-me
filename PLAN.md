@@ -64,6 +64,20 @@ I inspected the site on 2026-09-23. It's different from the Claude blog: it **ha
 
 **Proposed config for this site** is in §4.4.
 
+### 2.3 The claude.dev blog
+
+I inspected the site on 2026-09-24. It needed **no Go changes**: `sites/claude-dev.yaml` is config only.
+
+| Aspect | Finding | Implication |
+|---|---|---|
+| Platform | Next.js, server-rendered. The home page is the blog index, and `/blog` redirects to `/`. | Plain HTTP fetch is enough. |
+| Feeds | None: `/rss.xml` and `/feed.xml` return 404, and nothing is advertised in `<head>`. | Feed Me! supplies the only feed. |
+| Sitemap | Lists every post (8) as `https://claude.dev/blog/<slug>/`, **with a trailing slash**, alongside `/`, `/terminal/` and `/terms/`. Every `lastmod` is today's date, so it's a rebuild stamp. | Use `sitemap` discovery with `^https://claude\.dev/blog/[^/?#]+/$`. |
+| `robots.txt` | `Allow: /`. | Fetching post pages is allowed. |
+| Metadata | JSON-LD `BlogPosting` has a clean `headline`, `description`, `datePublished` (ISO date only, e.g. `2026-09-23`, no `dateModified`) and `articleSection`. `og:title` adds a ` / claude.dev Blog` suffix. | Title from JSON-LD. `articleSection` becomes the item's category. Date-only policy (§5) applies. |
+| Author | Some posts have two or three authors. JSON-LD `author` is an array, and `author`/`article:author` meta tags repeat, so a scalar source keeps only the first. The visible byline `#mAuthor` reads "Raymond Wang, Sam Attard, and Issac G." | Author: `css:#mAuthor`, falling back to JSON-LD. |
+| Body | `div.prose#body`, one per post, holding `section.art-section` blocks. It includes code blocks with a "CODE <lang>" header and Copy button, `<video>` animations that repeat their poster as an `<img>`, mock Slack threads with an "App" badge and timestamps, and captions prefixed "FIG A", "VIDEO" and so on, which the prose never cites. | Exclude those pieces (see the config). **Inline SVG diagrams** (`figure.art-diagram`, with no caption) are lost, because the sanitizer drops `<svg>`; their `aria-label` describes each chart in full. |
+
 ---
 
 ## 3. Architecture
@@ -463,9 +477,11 @@ feed-me/
     pipeline/    # orchestrates one site run
   sites/
     claude-blog.yaml
+    claude-dev.yaml
     select-dev.yaml
   testdata/
     claude-blog/ # saved HTML fixtures + sitemap + expected golden feed
+    claude-dev/  # sitemap + 3 saved posts + golden check output
     select-dev/  # saved posts/rss.xml (with stega chars intact) + post HTML + golden feed
   deploy/
     feed-me.yaml  # container config: store on /data, JSON logs

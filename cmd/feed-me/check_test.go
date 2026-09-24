@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,11 +30,14 @@ func fixtures(t *testing.T) *fetchtest.Transport {
 		"https://claude.com/robots.txt":    root + "/testdata/claude-blog/robots.txt",
 		"https://select.dev/posts/rss.xml": root + "/testdata/select-dev/rss.xml",
 		"https://select.dev/robots.txt":    root + "/testdata/select-dev/robots.txt",
+		"https://claude.dev/sitemap.xml":   root + "/testdata/claude-dev/sitemap.xml",
+		"https://claude.dev/robots.txt":    root + "/testdata/claude-dev/robots.txt",
 	}
-	for site, host := range map[string]string{"claude-blog": "https://claude.com/blog/", "select-dev": "https://select.dev/posts/"} {
+	// claude.dev post URLs end in a slash.
+	for site, url := range map[string]string{"claude-blog": "https://claude.com/blog/%s", "select-dev": "https://select.dev/posts/%s", "claude-dev": "https://claude.dev/blog/%s/"} {
 		posts, _ := filepath.Glob(filepath.Join(root, "testdata", site, "posts", "*.html"))
 		for _, p := range posts {
-			files[host+strings.TrimSuffix(filepath.Base(p), ".html")] = p
+			files[fmt.Sprintf(url, strings.TrimSuffix(filepath.Base(p), ".html"))] = p
 		}
 	}
 	return &fetchtest.Transport{Files: files}
@@ -218,4 +222,37 @@ func TestCheckSelectDev(t *testing.T) {
 		}
 	}
 	golden(t, "select-dev/check.golden.json", got)
+}
+
+// TestCheckClaudeDev covers claude.dev: JSON-LD titles without the og:title
+// suffix, a byline naming every author, and date-only ISO dates.
+func TestCheckClaudeDev(t *testing.T) {
+	want := []struct{ slug, title, author, published, category string }{
+		// video, Slack-thread mockups, SVG diagrams, three authors
+		{"how-we-made-claude-ai-faster", "How we made claude.ai 3x faster in two weeks", "Raymond Wang, Sam Attard, and Issac G.", "2026-09-23T00:00:00-07:00", "Engineering"},
+		// code blocks
+		{"getting-the-most-out-of-opus-5-5", "Getting the most out of Opus 5.5 in Claude and Claude Code", "Addy Osmani", "2026-09-22T00:00:00-07:00", "Playbooks"},
+		// images
+		{"seeing-like-an-agent", "Seeing like an agent: how we design tools in Claude Code", "Thariq Shihipar", "2026-04-10T00:00:00-07:00", "Agents"},
+	}
+	var args []string
+	for _, w := range want {
+		args = append(args, "--url", "https://claude.dev/blog/"+w.slug+"/")
+	}
+	got := runCheck(t, append(args, "--site", "claude-dev")...)
+	if len(got) != len(want) {
+		t.Fatalf("got %d results", len(got))
+	}
+	for i, w := range want {
+		d := got[i]
+		if d.Error != "" || len(d.Warnings) > 0 || d.Canonical != d.URL || d.Summary == "" || d.Image == "" || d.ContentChars < 5000 {
+			t.Errorf("%s: incomplete: %+v", w.slug, d)
+		}
+		if d.Title != w.title || d.Author != w.author || d.Published != w.published || !d.PublishedDateOnly ||
+			len(d.Categories) != 1 || d.Categories[0] != w.category {
+			t.Errorf("%s: title=%q author=%q published=%s dateOnly=%v categories=%v",
+				w.slug, d.Title, d.Author, d.Published, d.PublishedDateOnly, d.Categories)
+		}
+	}
+	golden(t, "claude-dev/check.golden.json", got)
 }
