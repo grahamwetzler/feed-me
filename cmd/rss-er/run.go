@@ -59,9 +59,6 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	served := make(chan error, 1)
 	go func() { served <- hs.Serve(ln) }()
 	e.log.Info("serving", "addr", ln.Addr().String(), "base_path", g.BasePath, "sites", len(e.sites))
-	if listening != nil {
-		listening(ln.Addr().String())
-	}
 
 	// Runs don't use ctx: on a signal, Stop lets the page in flight finish.
 	// runCtx is only cancelled if that takes longer than stopTimeout.
@@ -94,6 +91,9 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	}
 	scheduled := make(chan error, 1)
 	go func() { scheduled <- sched.Loop(ctx) }()
+	if listening != nil {
+		listening(ln.Addr().String())
+	}
 
 	failed, schedDone := false, false
 	select {
@@ -104,10 +104,16 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		failed = true
 		stop()
 	case err := <-scheduled:
+		schedDone = true
+		if err == nil && ctx.Err() != nil {
+			// The signal reached the scheduler before this select saw it.
+			e.log.Info("shutting down")
+			break
+		}
 		// Without the scheduler, feeds would silently stop refreshing while
 		// /healthz stays green; exit so the container is restarted.
 		e.log.Error("scheduler stopped; exiting", "err", err)
-		failed, schedDone = true, true
+		failed = true
 		stop()
 	}
 	close(stopRuns)

@@ -37,6 +37,9 @@ func (s *Scheduler) Loop(ctx context.Context) error {
 	next := make([]time.Time, len(s.Sites))
 	for i, site := range s.Sites {
 		last, err := s.LastRun(ctx, site.ID)
+		if ctx.Err() != nil {
+			return nil // stopped, not failed, even if the read failed for it
+		}
 		if err != nil {
 			return err
 		}

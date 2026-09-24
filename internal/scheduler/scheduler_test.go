@@ -78,3 +78,18 @@ func TestLoopStopsWhileWaiting(t *testing.T) {
 		t.Fatal("Loop did not return after cancel")
 	}
 }
+
+func TestLoopStoppedDuringStartupIsNotAnError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Scheduler{
+		Sites: []*config.Site{site("a", time.Hour)},
+		LastRun: func(ctx context.Context, _ string) (time.Time, error) {
+			cancel() // a signal arrives while the store is read
+			return time.Time{}, ctx.Err()
+		},
+		Run: func(context.Context, *config.Site) { t.Error("ran after cancel") },
+	}
+	if err := s.Loop(ctx); err != nil {
+		t.Errorf("Loop = %v, want nil for a shutdown", err)
+	}
+}

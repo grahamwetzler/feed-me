@@ -173,3 +173,28 @@ func TestRunExitsWhenSchedulerFails(t *testing.T) {
 		t.Fatal("run kept going without a scheduler")
 	}
 }
+
+// A signal that reaches the scheduler before run's select sees it is still an
+// ordinary shutdown: both channels are ready then, and either may be picked.
+func TestRunSignalRacingSchedulerExitsCleanly(t *testing.T) {
+	transport, rateOverride = fixtures(t), 1000
+	t.Setenv("RSS_ER_PUBLIC_BASE_URL", "")
+	listening = func(string) {
+		syscall.Kill(os.Getpid(), syscall.SIGTERM)
+		time.Sleep(100 * time.Millisecond) // lets the scheduler see it and return
+	}
+	t.Cleanup(func() { transport, rateOverride, listening = nil, 0, nil })
+
+	sites, err := filepath.Abs(filepath.Join(root, "sites"))
+	must(t, err)
+	for i := range 8 {
+		dir := t.TempDir()
+		cfg := filepath.Join(dir, "rss-er.yaml")
+		must(t, os.WriteFile(cfg, []byte("public_base_url: https://rss.example.com\nlisten: 127.0.0.1:0\nsites_dir: "+sites+
+			"\nstore_path: "+filepath.Join(dir, "rss-er.db")+"\nlog: {format: text}\n"), 0o644))
+		var stdout, stderr syncBuffer
+		if code := run([]string{"run", "--config", cfg}, &stdout, &stderr); code != 0 || strings.Contains(stderr.String(), "scheduler") {
+			t.Fatalf("attempt %d: exit %d\n%s", i, code, stderr.String())
+		}
+	}
+}
