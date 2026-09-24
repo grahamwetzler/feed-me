@@ -311,7 +311,11 @@ func TestRobotsCacheIsPerHeaderSet(t *testing.T) {
 }
 
 func TestRobotsCacheDropsExpiredEntries(t *testing.T) {
+	var robotsCalls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/robots.txt" {
+			robotsCalls.Add(1)
+		}
 		_, _ = w.Write([]byte("ok"))
 	}))
 	defer srv.Close()
@@ -319,19 +323,31 @@ func TestRobotsCacheDropsExpiredEntries(t *testing.T) {
 	now := time.Now()
 	c.robots.now = func() time.Time { return now }
 	ctx := context.Background()
-	for i := range 5 {
+	fetch := func(token string) {
+		t.Helper()
 		o := fast
-		o.Headers = map[string]string{"Authorization": "Bearer " + strconv.Itoa(i)}
+		o.Headers = map[string]string{"Authorization": "Bearer " + token}
 		if _, err := c.Site(o).Fetch(ctx, Request{URL: srv.URL + "/x"}); err != nil {
 			t.Fatal(err)
 		}
+	}
+	for i := range 3 {
+		fetch(strconv.Itoa(i))
 		now = now.Add(robotsTTL) // each token's entry expires before the next is used
 	}
+	fetch("live")
+	now = now.Add(robotsTTL / 2)
+	fetch("new") // sweeps the expired entries but not "live"
 	c.robots.mu.Lock()
 	n := len(c.robots.m)
 	c.robots.mu.Unlock()
-	if n != 1 {
-		t.Errorf("robots cache holds %d entries, want 1 (expired ones dropped)", n)
+	if n != 2 {
+		t.Errorf("robots cache holds %d entries, want 2 (expired ones dropped, live ones kept)", n)
+	}
+	calls := robotsCalls.Load()
+	fetch("live")
+	if robotsCalls.Load() != calls {
+		t.Error("a still-valid entry was dropped: robots.txt fetched again")
 	}
 }
 
