@@ -20,7 +20,8 @@ func Check(data []byte) []string {
 	// Well-formedness, independent of the structs below. The decoder accepts
 	// fragments, so also require exactly one root element and nothing but
 	// whitespace, comments and processing instructions outside it.
-	dec := xml.NewDecoder(bytes.NewReader(data))
+	// A UTF-8 byte-order mark may precede the document; anywhere else it is text.
+	dec := xml.NewDecoder(bytes.NewReader(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))))
 	depth, roots := 0, 0
 	for {
 		tok, err := dec.Token()

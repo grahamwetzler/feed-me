@@ -148,4 +148,10 @@ func TestCheckRejectsFragments(t *testing.T) {
 	if p := Check(append(append([]byte{}, out...), "\n<!-- note -->\n"...)); len(p) != 0 {
 		t.Errorf("trailing comment should pass: %q", p)
 	}
+	if p := Check(append([]byte("\xef\xbb\xbf"), out...)); len(p) != 0 {
+		t.Errorf("leading BOM should pass: %q", p)
+	}
+	if p := Check(append(append([]byte{}, out...), "\xef\xbb\xbf"...)); len(p) == 0 {
+		t.Error("BOM after the root should fail")
+	}
 }
