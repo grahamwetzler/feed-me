@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"rss-er/internal/config"
+	"feed-me/internal/config"
 )
 
 // site loads a minimal site config whose item section is itemYAML.
 func site(t *testing.T, itemYAML string) *config.Site {
 	t.Helper()
 	dir := t.TempDir()
-	g := filepath.Join(dir, "rss-er.yaml")
+	g := filepath.Join(dir, "feed-me.yaml")
 	if err := os.WriteFile(g, []byte("public_base_url: https://rss.example.com\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

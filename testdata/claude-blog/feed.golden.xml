@@ -9,7 +9,7 @@
     <pubDate>Thu, 10 Sep 2026 16:30:00 +0000</pubDate>
     <lastBuildDate>Sun, 13 Sep 2026 16:30:00 +0000</lastBuildDate>
     <docs>https://www.rssboard.org/rss-specification</docs>
-    <generator>rss-er/test</generator>
+    <generator>feed-me/test</generator>
     <ttl>60</ttl>
     <item>
       <title>T. Rowe Price Group brings more of Claude to its investment process</title>

@@ -13,20 +13,20 @@ import (
 
 	"github.com/andybalholm/cascadia"
 
-	"rss-er/internal/config"
-	"rss-er/internal/fetch"
-	"rss-er/internal/fetch/fetchtest"
+	"feed-me/internal/config"
+	"feed-me/internal/fetch"
+	"feed-me/internal/fetch/fetchtest"
 )
 
 func fetcher(files map[string]string) (fetch.Fetcher, *fetchtest.Transport) {
 	tr := &fetchtest.Transport{Files: files}
-	c := fetch.NewClient(&http.Client{Transport: tr}, "rss-er/test", 16<<20, nil)
+	c := fetch.NewClient(&http.Client{Transport: tr}, "feed-me/test", 16<<20, nil)
 	return c.Site(fetch.Options{Rate: 1000, RespectRobots: true}), tr
 }
 
 func loadSite(t *testing.T, id string) *config.Site {
 	t.Helper()
-	cfg, err := config.Load("../../rss-er.yaml")
+	cfg, err := config.Load("../../feed-me.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,8 +112,8 @@ item: {title: [listing:title], content: {selector: article}}
 `
 	writeFile(t, filepath.Join(dir, "atom.xml"), atom)
 	writeFile(t, filepath.Join(dir, "sites", "ex.yaml"), links)
-	writeFile(t, filepath.Join(dir, "rss-er.yaml"), "public_base_url: https://rss.example.com\n")
-	cfg, err := config.Load(filepath.Join(dir, "rss-er.yaml"))
+	writeFile(t, filepath.Join(dir, "feed-me.yaml"), "public_base_url: https://rss.example.com\n")
+	cfg, err := config.Load(filepath.Join(dir, "feed-me.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}

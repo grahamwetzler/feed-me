@@ -14,13 +14,13 @@ import (
 	"testing"
 	"time"
 
-	"rss-er/internal/config"
-	"rss-er/internal/discovery"
-	"rss-er/internal/extract"
-	"rss-er/internal/feed"
-	"rss-er/internal/fetch"
-	"rss-er/internal/fetch/fetchtest"
-	"rss-er/internal/store"
+	"feed-me/internal/config"
+	"feed-me/internal/discovery"
+	"feed-me/internal/extract"
+	"feed-me/internal/feed"
+	"feed-me/internal/fetch"
+	"feed-me/internal/fetch/fetchtest"
+	"feed-me/internal/store"
 )
 
 const root = "../.."
@@ -30,7 +30,7 @@ var update = flag.Bool("update", false, "rewrite golden files")
 // checkAtom renders the site's Atom feed, checks it and compares it with a golden file.
 func checkAtom(t *testing.T, ctx context.Context, st *store.Store, g *config.Global, site *config.Site, name string) {
 	t.Helper()
-	data, _, err := Render(ctx, st, g, site, "rss-er/test", Atom)
+	data, _, err := Render(ctx, st, g, site, "feed-me/test", Atom)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ var la, _ = time.LoadLocation("America/Los_Angeles")
 
 func newRunner(t *testing.T, now *time.Time) *Runner {
 	t.Helper()
-	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "rss-er.db"))
+	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "feed-me.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func newRunner(t *testing.T, now *time.Time) *Runner {
 
 func fetcherFor(files map[string]string) (fetch.Fetcher, *fetchtest.Transport) {
 	tr := &fetchtest.Transport{Files: files}
-	c := fetch.NewClient(&http.Client{Transport: tr}, "rss-er/test", 16<<20, nil)
+	c := fetch.NewClient(&http.Client{Transport: tr}, "feed-me/test", 16<<20, nil)
 	return c.Site(fetch.Options{Rate: 1000, RespectRobots: true}), tr
 }
 
@@ -133,7 +133,7 @@ func TestSelectDevBackfillAndSteadyState(t *testing.T) {
 		t.Fatalf("first run: %+v", st)
 	}
 
-	data, n, err := Render(ctx, r.Store, g, site, "rss-er/test", RSS)
+	data, n, err := Render(ctx, r.Store, g, site, "feed-me/test", RSS)
 	if err != nil || n != 4 {
 		t.Fatalf("render: n=%d err=%v", n, err)
 	}
@@ -254,7 +254,7 @@ func TestClaudeBlogTimestampsAndEdits(t *testing.T) {
 	}
 
 	// Rendered order: newest first, and the feed passes the local checks.
-	data, n, err := Render(ctx, r.Store, g, site, "rss-er/test", RSS)
+	data, n, err := Render(ctx, r.Store, g, site, "feed-me/test", RSS)
 	if err != nil || n != 4 {
 		t.Fatalf("render: %d %v", n, err)
 	}

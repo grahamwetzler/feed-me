@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"time"
 
-	"rss-er/internal/feed"
-	"rss-er/internal/fetch"
-	"rss-er/internal/pipeline"
+	"feed-me/internal/feed"
+	"feed-me/internal/fetch"
+	"feed-me/internal/pipeline"
 )
 
 // cmdValidate renders each selected site's feed from the store and checks it
@@ -43,7 +43,7 @@ func cmdValidate(args []string, stdout, stderr io.Writer) int {
 				continue
 			}
 			if n == 0 {
-				fmt.Fprintf(stderr, "%s: no stored items; run rss-er build first\n", name)
+				fmt.Fprintf(stderr, "%s: no stored items; run feed-me build first\n", name)
 				failed = true
 				continue
 			}

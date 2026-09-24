@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"rss-er/internal/store"
+	"feed-me/internal/store"
 )
 
 // syncBuffer is a bytes.Buffer safe for the run goroutine's logger.
@@ -38,7 +38,7 @@ func (s *syncBuffer) String() string {
 
 func TestRunServesFeedsAndShutsDown(t *testing.T) {
 	transport, rateOverride = fixtures(t), 1000
-	t.Setenv("RSS_ER_PUBLIC_BASE_URL", "")
+	t.Setenv("FEED_ME_PUBLIC_BASE_URL", "")
 	addrs := make(chan string, 1)
 	listening = func(a string) { addrs <- a }
 	t.Cleanup(func() { transport, rateOverride, listening = nil, 0, nil })
@@ -46,9 +46,9 @@ func TestRunServesFeedsAndShutsDown(t *testing.T) {
 	dir := t.TempDir()
 	sites, err := filepath.Abs(filepath.Join(root, "sites"))
 	must(t, err)
-	cfg := filepath.Join(dir, "rss-er.yaml")
+	cfg := filepath.Join(dir, "feed-me.yaml")
 	must(t, os.WriteFile(cfg, []byte("public_base_url: https://rss.example.com\nbase_path: /rss/\nlisten: 127.0.0.1:0\nsites_dir: "+sites+
-		"\nstore_path: "+filepath.Join(dir, "rss-er.db")+"\nlog: {format: text, level: info}\n"), 0o644))
+		"\nstore_path: "+filepath.Join(dir, "feed-me.db")+"\nlog: {format: text, level: info}\n"), 0o644))
 
 	var stdout, stderr syncBuffer
 	done := make(chan int, 1)
@@ -144,9 +144,9 @@ func TestHealthURL(t *testing.T) {
 // A scheduler that can't start must end the process, not leave it serving
 // stale feeds behind a green healthcheck.
 func TestRunExitsWhenSchedulerFails(t *testing.T) {
-	t.Setenv("RSS_ER_PUBLIC_BASE_URL", "")
+	t.Setenv("FEED_ME_PUBLIC_BASE_URL", "")
 	dir := t.TempDir()
-	db := filepath.Join(dir, "rss-er.db")
+	db := filepath.Join(dir, "feed-me.db")
 	st, err := store.Open(context.Background(), db)
 	must(t, err)
 	must(t, st.Close())
@@ -158,7 +158,7 @@ func TestRunExitsWhenSchedulerFails(t *testing.T) {
 
 	sites, err := filepath.Abs(filepath.Join(root, "sites"))
 	must(t, err)
-	cfg := filepath.Join(dir, "rss-er.yaml")
+	cfg := filepath.Join(dir, "feed-me.yaml")
 	must(t, os.WriteFile(cfg, []byte("public_base_url: https://rss.example.com\nlisten: 127.0.0.1:0\nsites_dir: "+sites+
 		"\nstore_path: "+db+"\nlog: {format: text}\n"), 0o644))
 
@@ -201,7 +201,7 @@ func TestSchedulerFailed(t *testing.T) {
 // an ordinary shutdown.
 func TestRunEarlySignalExitsCleanly(t *testing.T) {
 	transport, rateOverride = fixtures(t), 1000
-	t.Setenv("RSS_ER_PUBLIC_BASE_URL", "")
+	t.Setenv("FEED_ME_PUBLIC_BASE_URL", "")
 	listening = func(string) {
 		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
 			t.Error(err)
@@ -212,9 +212,9 @@ func TestRunEarlySignalExitsCleanly(t *testing.T) {
 	dir := t.TempDir()
 	sites, err := filepath.Abs(filepath.Join(root, "sites"))
 	must(t, err)
-	cfg := filepath.Join(dir, "rss-er.yaml")
+	cfg := filepath.Join(dir, "feed-me.yaml")
 	must(t, os.WriteFile(cfg, []byte("public_base_url: https://rss.example.com\nlisten: 127.0.0.1:0\nsites_dir: "+sites+
-		"\nstore_path: "+filepath.Join(dir, "rss-er.db")+"\nlog: {format: text}\n"), 0o644))
+		"\nstore_path: "+filepath.Join(dir, "feed-me.db")+"\nlog: {format: text}\n"), 0o644))
 	var stdout, stderr syncBuffer
 	done := make(chan int, 1)
 	go func() { done <- run([]string{"run", "--config", cfg}, &stdout, &stderr) }()

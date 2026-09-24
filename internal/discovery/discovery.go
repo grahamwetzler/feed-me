@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"rss-er/internal/config"
-	"rss-er/internal/fetch"
+	"feed-me/internal/config"
+	"feed-me/internal/fetch"
 )
 
 // Candidate is a discovered article URL with optional hints that

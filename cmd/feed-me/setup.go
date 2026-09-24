@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"rss-er/internal/config"
-	"rss-er/internal/fetch"
+	"feed-me/internal/config"
+	"feed-me/internal/fetch"
 )
 
 func newLogger(c config.Log, w io.Writer) *slog.Logger {

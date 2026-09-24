@@ -90,7 +90,7 @@ func TestLayout(t *testing.T) {
 
 func TestLoadShippedConfigs(t *testing.T) {
 	t.Setenv(EnvPublicBaseURL, "")
-	cfg, err := Load("../../rss-er.yaml")
+	cfg, err := Load("../../feed-me.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestLoadShippedConfigs(t *testing.T) {
 
 func TestPublicBaseURLFromEnv(t *testing.T) {
 	t.Setenv(EnvPublicBaseURL, "https://rss.example.com/")
-	g, err := LoadGlobal("../../rss-er.yaml")
+	g, err := LoadGlobal("../../feed-me.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestPublicBaseURLFromEnv(t *testing.T) {
 func writeSite(t *testing.T, name, body string) (globalPath, sitePath string) {
 	t.Helper()
 	dir := t.TempDir()
-	globalPath = filepath.Join(dir, "rss-er.yaml")
+	globalPath = filepath.Join(dir, "feed-me.yaml")
 	must(t, os.WriteFile(globalPath, []byte("public_base_url: https://rss.example.com\n"), 0o644))
 	must(t, os.Mkdir(filepath.Join(dir, "sites"), 0o755))
 	sitePath = filepath.Join(dir, "sites", name)
@@ -233,7 +233,7 @@ func TestDuplicateAndMissingSites(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	gp := filepath.Join(dir, "rss-er.yaml")
+	gp := filepath.Join(dir, "feed-me.yaml")
 	must(t, os.WriteFile(gp, []byte("public_base_url: https://x.example\nsites_dir: nope\n"), 0o644))
 	if _, err := Load(gp); err == nil || !strings.Contains(err.Error(), "sites_dir") {
 		t.Errorf("missing sites dir: %v", err)
@@ -302,7 +302,7 @@ item: {title: [css:h1], content: {selector: article}}
 func TestListenNeedsAPort(t *testing.T) {
 	t.Setenv(EnvPublicBaseURL, "")
 	for listen, ok := range map[string]bool{":8080": true, "127.0.0.1:9000": true, "[::]:80": true, "9000": false, "localhost": false, "localhost:": false} {
-		path := filepath.Join(t.TempDir(), "rss-er.yaml")
+		path := filepath.Join(t.TempDir(), "feed-me.yaml")
 		if err := os.WriteFile(path, []byte("public_base_url: https://rss.example.com\nlisten: \""+listen+"\"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -319,7 +319,7 @@ func TestBasePathMustBeLiteral(t *testing.T) {
 		"/": "/", "/rss": "/rss/", "/rss/": "/rss/", "/a/b-c.d~e_f/": "/a/b-c.d~e_f/",
 		"/a{b/": "", "/{x}/": "", "/a//b/": "", "/a b/": "", "/../": "", "/a/./": "", "/%41/": "",
 	} {
-		path := filepath.Join(t.TempDir(), "rss-er.yaml")
+		path := filepath.Join(t.TempDir(), "feed-me.yaml")
 		must(t, os.WriteFile(path, []byte("public_base_url: https://rss.example.com\nbase_path: \""+base+"\"\n"), 0o644))
 		g, err := LoadGlobal(path)
 		switch {
@@ -337,7 +337,7 @@ func TestBasePathMustBeLiteral(t *testing.T) {
 // with ../sites resolving to the shipped sites.
 func TestLoadDeployConfig(t *testing.T) {
 	t.Setenv(EnvPublicBaseURL, "")
-	cfg, err := Load("../../deploy/rss-er.yaml")
+	cfg, err := Load("../../deploy/feed-me.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +349,7 @@ func TestLoadDeployConfig(t *testing.T) {
 	if got, _ := filepath.Abs(cfg.Global.SitesDir); got != want {
 		t.Errorf("sites_dir = %s, want %s", got, want)
 	}
-	if cfg.Global.StorePath != "/data/rss-er.db" {
-		t.Errorf("store_path = %s, want /data/rss-er.db", cfg.Global.StorePath)
+	if cfg.Global.StorePath != "/data/feed-me.db" {
+		t.Errorf("store_path = %s, want /data/feed-me.db", cfg.Global.StorePath)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"rss-er/internal/normalize"
+	"feed-me/internal/normalize"
 )
 
 type atomFeed struct {

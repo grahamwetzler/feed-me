@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	"rss-er/internal/config"
+	"feed-me/internal/config"
 )
 
 // Scheduler runs one site at a time, since the store has a single writer.

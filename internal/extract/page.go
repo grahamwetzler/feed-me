@@ -15,8 +15,8 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"rss-er/internal/config"
-	"rss-er/internal/normalize"
+	"feed-me/internal/config"
+	"feed-me/internal/normalize"
 )
 
 // Page is a fetched article, parsed once and queried per source.

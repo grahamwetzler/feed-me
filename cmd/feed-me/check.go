@@ -14,10 +14,10 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"rss-er/internal/config"
-	"rss-er/internal/discovery"
-	"rss-er/internal/extract"
-	"rss-er/internal/fetch"
+	"feed-me/internal/config"
+	"feed-me/internal/discovery"
+	"feed-me/internal/extract"
+	"feed-me/internal/fetch"
 )
 
 // urlList collects a repeatable --url flag.
@@ -45,11 +45,11 @@ func cmdCheck(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if *siteID == "" {
-		fmt.Fprintln(stderr, "rss-er check: --site is required")
+		fmt.Fprintln(stderr, "feed-me check: --site is required")
 		return 2
 	}
 	if *limit < 1 {
-		fmt.Fprintln(stderr, "rss-er check: --limit must be at least 1")
+		fmt.Fprintln(stderr, "feed-me check: --limit must be at least 1")
 		return 2
 	}
 
@@ -59,7 +59,7 @@ func cmdCheck(args []string, stdout, stderr io.Writer) int {
 	}
 	site := cfg.Site(*siteID)
 	if site == nil {
-		fmt.Fprintf(stderr, "rss-er check: no site %q in %s\n", *siteID, cfg.Global.SitesDir)
+		fmt.Fprintf(stderr, "feed-me check: no site %q in %s\n", *siteID, cfg.Global.SitesDir)
 		return 2
 	}
 
@@ -80,7 +80,7 @@ func cmdCheck(args []string, stdout, stderr io.Writer) int {
 	} else {
 		cands, err := discovery.Discover(ctx, f, site)
 		if err != nil {
-			fmt.Fprintf(stderr, "rss-er check: %v\n", err)
+			fmt.Fprintf(stderr, "feed-me check: %v\n", err)
 			return 1
 		}
 		fmt.Fprintf(stderr, "discovered %d URLs; checking the first %d\n", len(cands), min(*limit, len(cands)))

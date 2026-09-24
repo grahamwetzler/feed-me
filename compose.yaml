@@ -1,6 +1,6 @@
 services:
-  rss-er:
-    image: rss-er:latest
+  feed-me:
+    image: feed-me:latest
     build:
       context: .
       args:
@@ -9,14 +9,14 @@ services:
     # Shutdown lets the page in flight finish (up to 30s), then drains HTTP (10s).
     stop_grace_period: 45s
     environment:
-      RSS_ER_PUBLIC_BASE_URL: https://rss.example.com
+      FEED_ME_PUBLIC_BASE_URL: https://rss.example.com
     volumes:
       # A named volume works as is. A bind mount (./data:/data) must be
       # writable by the container's nonroot user: chown 65532:65532 ./data
-      - rss-er-data:/data
+      - feed-me-data:/data
       # Directories, not single files, so an editor's save-by-rename is seen.
       - ./deploy:/config:ro
       - ./sites:/sites:ro
     expose: ["8080"] # the reverse proxy joins this network; no host port needed
 volumes:
-  rss-er-data:
+  feed-me-data:

@@ -11,7 +11,7 @@ func sample() (Channel, []Item) {
 	ch := Channel{
 		Title: "Claude Blog", Link: "https://claude.com/blog", Description: "News & guides",
 		Language: "en-us", TTL: 60, SelfURL: "https://rss.example.com/feeds/claude-blog.xml",
-		LastBuild: time.Date(2026, 9, 24, 16, 0, 0, 0, time.UTC), Generator: "rss-er/test",
+		LastBuild: time.Date(2026, 9, 24, 16, 0, 0, 0, time.UTC), Generator: "feed-me/test",
 	}
 	items := []Item{
 		{

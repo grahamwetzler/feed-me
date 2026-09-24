@@ -1,17 +1,17 @@
-# Container config (PLAN.md §8.1). The image bakes this in at /config/rss-er.yaml
+# Container config (PLAN.md §8.1). The image bakes this in at /config/feed-me.yaml
 # and the shipped sites at /sites; compose.yaml mounts this directory and the
 # repo's sites/ over both, so an edit to either needs only a restart.
 # ../sites is /sites in the container and the repo's sites/ outside it.
 sites_dir: ../sites
-store_path: /data/rss-er.db
+store_path: /data/feed-me.db
 listen: ":8080"
 
-# Set RSS_ER_PUBLIC_BASE_URL instead of editing this; it wins over the file.
+# Set FEED_ME_PUBLIC_BASE_URL instead of editing this; it wins over the file.
 public_base_url: http://localhost:8080
 base_path: /
 
-# Appended to the User-Agent: rss-er/<version> (+<contact_url>)
-# contact_url: https://example.com/rss-er
+# Appended to the User-Agent: feed-me/<version> (+<contact_url>)
+# contact_url: https://example.com/feed-me
 
 log:
   format: json

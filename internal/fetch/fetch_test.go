@@ -14,7 +14,7 @@ import (
 )
 
 func newTestClient(srv *httptest.Server) *Client {
-	c := NewClient(srv.Client(), "rss-er/test (+https://example.com)", 1<<10, nil)
+	c := NewClient(srv.Client(), "feed-me/test (+https://example.com)", 1<<10, nil)
 	c.backoff = func(int) time.Duration { return time.Millisecond }
 	return c
 }
@@ -38,7 +38,7 @@ func TestFetchSetsUserAgentAndHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(resp.Body); got != "rss-er/test (+https://example.com)|yes" {
+	if got := string(resp.Body); got != "feed-me/test (+https://example.com)|yes" {
 		t.Errorf("body = %q", got)
 	}
 	if resp.ETag != `"v1"` {
@@ -136,7 +136,7 @@ func TestRobots(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/robots.txt" {
 			robotsCalls.Add(1)
-			_, _ = w.Write([]byte("User-agent: *\nDisallow: /*.json$\n\nUser-agent: rss-er\nDisallow: /private/\n"))
+			_, _ = w.Write([]byte("User-agent: *\nDisallow: /*.json$\n\nUser-agent: feed-me\nDisallow: /private/\n"))
 			return
 		}
 		_, _ = w.Write([]byte("ok"))
@@ -149,9 +149,9 @@ func TestRobots(t *testing.T) {
 		t.Errorf("allowed path: %v", err)
 	}
 	if _, err := f.Fetch(ctx, Request{URL: srv.URL + "/private/x"}); !errors.Is(err, ErrDisallowed) {
-		t.Errorf("rss-er group should disallow /private/: %v", err)
+		t.Errorf("feed-me group should disallow /private/: %v", err)
 	}
-	// Our own group applies, not *, so *.json is allowed for rss-er.
+	// Our own group applies, not *, so *.json is allowed for feed-me.
 	if _, err := f.Fetch(ctx, Request{URL: srv.URL + "/data.json"}); err != nil {
 		t.Errorf("/data.json: %v", err)
 	}
@@ -375,10 +375,10 @@ func TestParseRetryAfter(t *testing.T) {
 }
 
 func TestUserAgent(t *testing.T) {
-	if got := UserAgent("1.2.3", "https://example.com/bot"); got != "rss-er/1.2.3 (+https://example.com/bot)" {
+	if got := UserAgent("1.2.3", "https://example.com/bot"); got != "feed-me/1.2.3 (+https://example.com/bot)" {
 		t.Error(got)
 	}
-	if got := UserAgent("dev", ""); got != "rss-er/dev" {
+	if got := UserAgent("dev", ""); got != "feed-me/dev" {
 		t.Error(got)
 	}
 }

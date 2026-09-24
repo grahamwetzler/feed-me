@@ -1,4 +1,4 @@
-module rss-er
+module feed-me
 
 go 1.27.1
 

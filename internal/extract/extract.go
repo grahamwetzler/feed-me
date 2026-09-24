@@ -9,8 +9,8 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
 
-	"rss-er/internal/config"
-	"rss-er/internal/normalize"
+	"feed-me/internal/config"
+	"feed-me/internal/normalize"
 )
 
 // Result is everything extracted from one article. Content is the raw inner
@@ -32,7 +32,7 @@ type Result struct {
 	Content           string `json:"content"`
 	ContentMatches    int    `json:"content_matches"`
 
-	// Sources records which source won for each field, for `rss-er check`.
+	// Sources records which source won for each field, for `feed-me check`.
 	Sources  map[string]string `json:"sources"`
 	Warnings []string          `json:"warnings,omitempty"`
 }

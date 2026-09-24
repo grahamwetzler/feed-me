@@ -1,4 +1,4 @@
-// Command rss-er turns websites into full-text RSS feeds from declarative configs.
+// Command feed-me turns websites into full-text RSS feeds from declarative configs.
 package main
 
 import (
@@ -11,24 +11,24 @@ import (
 	"strings"
 	_ "time/tzdata" // resolve site timezones inside distroless images
 
-	"rss-er/internal/config"
+	"feed-me/internal/config"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
-const usage = `rss-er turns websites into full-text RSS feeds.
+const usage = `Feed Me! turns websites into full-text RSS feeds.
 
 Usage:
-  rss-er run      [--config rss-er.yaml]   long-running: scheduler + HTTP server
-  rss-er build    [--site id]              one-shot: fetch and write static feeds to out_dir
-  rss-er check    --site id [--url URL]    dry-run extraction for one site
-  rss-er validate [--site id] [--w3c]      render feeds from the store and check them
-  rss-er config lint [site.yaml ...]       validate configs; exits non-zero on error
-  rss-er healthcheck                       probe /healthz (for Docker HEALTHCHECK)
-  rss-er version
+  feed-me run      [--config feed-me.yaml]   long-running: scheduler + HTTP server
+  feed-me build    [--site id]              one-shot: fetch and write static feeds to out_dir
+  feed-me check    --site id [--url URL]    dry-run extraction for one site
+  feed-me validate [--site id] [--w3c]      render feeds from the store and check them
+  feed-me config lint [site.yaml ...]       validate configs; exits non-zero on error
+  feed-me healthcheck                       probe /healthz (for Docker HEALTHCHECK)
+  feed-me version
 
-Every command accepts --config (default: rss-er.yaml, or $RSS_ER_CONFIG).
+Every command accepts --config (default: feed-me.yaml, or $FEED_ME_CONFIG).
 `
 
 func main() {
@@ -44,7 +44,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch cmd {
 	case "config":
 		if len(args) == 0 || args[0] != "lint" {
-			fmt.Fprintln(stderr, "usage: rss-er config lint [site.yaml ...]")
+			fmt.Fprintln(stderr, "usage: feed-me config lint [site.yaml ...]")
 			return 2
 		}
 		return cmdConfigLint(args[1:], stdout, stderr)
@@ -59,13 +59,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "healthcheck":
 		return cmdHealthcheck(args, stdout, stderr)
 	case "version", "--version", "-v":
-		fmt.Fprintln(stdout, "rss-er", version)
+		fmt.Fprintln(stdout, "feed-me", version)
 		return 0
 	case "help", "--help", "-h":
 		fmt.Fprint(stdout, usage)
 		return 0
 	default:
-		fmt.Fprintf(stderr, "rss-er: unknown command %q\n\n%s", cmd, usage)
+		fmt.Fprintf(stderr, "feed-me: unknown command %q\n\n%s", cmd, usage)
 		return 2
 	}
 }
@@ -74,9 +74,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 func newFlags(name string, stderr io.Writer) (*flag.FlagSet, *string) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	def := os.Getenv("RSS_ER_CONFIG")
+	def := os.Getenv("FEED_ME_CONFIG")
 	if def == "" {
-		def = "rss-er.yaml"
+		def = "feed-me.yaml"
 	}
 	return fs, fs.String("config", def, "path to the global config file")
 }

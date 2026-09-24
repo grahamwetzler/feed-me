@@ -8,9 +8,9 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"rss-er/internal/config"
-	"rss-er/internal/fetch"
-	"rss-er/internal/normalize"
+	"feed-me/internal/config"
+	"feed-me/internal/fetch"
+	"feed-me/internal/normalize"
 )
 
 // fromIndex reads listing pages: links matching link_selector become

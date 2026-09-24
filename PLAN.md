@@ -1,4 +1,4 @@
-# rss-er — Planning Document
+# Feed Me! — Planning Document
 
 *Drafted 2026-09-23 · decisions from review folded in the same day (see §12)*
 
@@ -46,7 +46,7 @@ I inspected the site on 2026-09-23:
 
 ### 2.2 The SELECT blog (select.dev)
 
-I inspected the site on 2026-09-23. It's different from the Claude blog: it **has** a feed, but the feed is poor. That makes it a useful second target, because it shows rss-er's value beyond sites with no feed at all.
+I inspected the site on 2026-09-23. It's different from the Claude blog: it **has** a feed, but the feed is poor. That makes it a useful second target, because it shows Feed Me!'s value beyond sites with no feed at all.
 
 | Aspect | Finding | Implication |
 |---|---|---|
@@ -104,7 +104,7 @@ I inspected the site on 2026-09-23. It's different from the Claude blog: it **ha
    - `robots.txt` checks, cached per host.
    - Conditional GET using stored `ETag`/`Last-Modified`. A `304` short-circuits extraction.
    - Retries with jittered backoff on 429 and 5xx, honoring `Retry-After`.
-   - An honest User-Agent: `rss-er/<version> (+<contact URL>)`.
+   - An honest User-Agent: `feed-me/<version> (+<contact URL>)`.
    - Response size cap and timeouts.
 3. **Extractor** works out each field from an ordered list of *sources*. The first source that returns a non-empty value wins:
    - `jsonld:<path>`: for example `jsonld:BlogPosting.datePublished`. It handles `@graph` arrays and multiple scripts.
@@ -119,7 +119,7 @@ I inspected the site on 2026-09-23. It's different from the Claude blog: it **ha
 
 ### 3.2 Incremental strategy
 
-- **Backfill (first run):** discover everything, then fetch every article at the rate limit. For the Claude blog that's 243 pages, about 4 minutes at 1 req/s, and it only happens once. The sitemap has no dates, so fetching each page is the only reliable way to find the 50 newest. If discovery already supplies dates (a `feed` source, as with select.dev), rss-er fetches only the newest `max_items` pages instead. Every item stays in SQLite afterward (a few MB at most), so old posts are never fetched again. The feed only ever shows the newest `max_items` (50).
+- **Backfill (first run):** discover everything, then fetch every article at the rate limit. For the Claude blog that's 243 pages, about 4 minutes at 1 req/s, and it only happens once. The sitemap has no dates, so fetching each page is the only reliable way to find the 50 newest. If discovery already supplies dates (a `feed` source, as with select.dev), feed-me fetches only the newest `max_items` pages instead. Every item stays in SQLite afterward (a few MB at most), so old posts are never fetched again. The feed only ever shows the newest `max_items` (50).
 - **Steady state:** run discovery on each tick and fetch only:
   - URLs not yet in the store.
   - Items published within the last `refresh_window` (default 14 days), to pick up edits. These use conditional GETs, so they're cheap when nothing changed.
@@ -132,7 +132,7 @@ I inspected the site on 2026-09-23. It's different from the Claude blog: it **ha
 
 ### 4.1 Files
 
-- `rss-er.yaml` holds global settings: store path, output directory, listen address, default rate limits and User-Agent.
+- `feed-me.yaml` holds global settings: store path, output directory, listen address, default rate limits and User-Agent.
 - `sites/<id>.yaml` holds one file per site. The `id` becomes the feed path, for example `/feeds/claude-blog.xml`.
 
 YAML is parsed with `gopkg.in/yaml.v3` using strict decoding, so unknown keys are errors. That catches typos early. The repo also ships a JSON Schema for editor autocompletion.
@@ -274,7 +274,7 @@ item:
     exclude: ['script', 'style', 'noscript', 'button']
 ```
 
-Discovery pulls all 103 posts from their feed. On the first run, rss-er fetches the 50 newest pages (their feed already gives dates, so it doesn't need to fetch everything to find the newest). About a minute at 1 req/s.
+Discovery pulls all 103 posts from their feed. On the first run, Feed Me! fetches the 50 newest pages (their feed already gives dates, so it doesn't need to fetch everything to find the newest). About a minute at 1 req/s.
 
 ---
 
@@ -288,7 +288,7 @@ Getting dates right matters most for how a feed feels, so the rules are explicit
    - Otherwise, as during backfill, use **00:00 local**. Items from the same day are then tie-broken by discovery order, stored as a sub-second offset so the order is deterministic.
 3. **Freeze on first emit.** The computed `published` value is stored and never recomputed, even if the policy or source changes later. The only exception is a real change to the source date: if the site's own `datePublished` changes to a different *day*, the stored value is updated and logged.
 4. **Updated:** If `dateModified` is later than `published`, emit it as `<atom:updated>` in Atom and track it internally. RSS 2.0 has no per-item updated field, so it isn't emitted there. The `<guid>` does **not** change on edits, because that would duplicate items in readers.
-5. **Fallback:** If no publish date can be extracted at all, use the first-seen time and log a warning. The item is never dropped for lacking a date. The `rss-er check` command (§8) surfaces these.
+5. **Fallback:** If no publish date can be extracted at all, use the first-seen time and log a warning. The item is never dropped for lacking a date. The `feed-me check` command (§8) surfaces these.
 6. **Serialization:**
    - RSS uses RFC 822 with a 4-digit year and numeric zone: `Mon, 02 Jan 2006 15:04:05 -0700`. Go's `time.RFC1123Z` produces exactly this. Timestamps are written in UTC (`+0000`) for consistency.
    - Atom uses RFC 3339.
@@ -360,11 +360,11 @@ Other output details:
 ## 8. CLI and deployment
 
 ```
-rss-er run      [--config rss-er.yaml]   # long-running: scheduler + HTTP server
-rss-er build    [--site id]              # one-shot: fetch + write static feeds to out_dir, exit
-rss-er check    --site id [--url URL]    # dry-run extraction; prints fields + warnings as a table/JSON
-rss-er validate [--site id]              # render + validate feed(s)
-rss-er config lint                       # validate all configs, exit non-zero on error
+feed-me run      [--config feed-me.yaml]   # long-running: scheduler + HTTP server
+feed-me build    [--site id]              # one-shot: fetch + write static feeds to out_dir, exit
+feed-me check    --site id [--url URL]    # dry-run extraction; prints fields + warnings as a table/JSON
+feed-me validate [--site id]              # render + validate feed(s)
+feed-me config lint                       # validate all configs, exit non-zero on error
 ```
 
 - `check` is the main tool for writing a new site config. It fetches one or a few URLs and shows every extracted field, which source won, and the parsed date. This gives a tight loop while writing selectors.
@@ -376,7 +376,7 @@ rss-er config lint                       # validate all configs, exit non-zero o
 
 ### 8.1 Docker deployment (primary target)
 
-The service runs as a long-lived `rss-er run` container behind the user's existing reverse proxy.
+The service runs as a long-lived `feed-me run` container behind the user's existing reverse proxy.
 
 **Image:**
 - A multi-stage `Dockerfile`: `golang:1.27` builds with `CGO_ENABLED=0` (possible because `modernc.org/sqlite` is pure Go), then the binary is copied into `gcr.io/distroless/static-debian12:nonroot`.
@@ -384,30 +384,30 @@ The service runs as a long-lived `rss-er run` container behind the user's existi
 - CA certificates come with the distroless base, and the timezone database is embedded with the `time/tzdata` import, so `America/Los_Angeles` resolves inside the container.
 
 **Volumes and config:**
-- `/data` holds the SQLite DB (`/data/rss-er.db`). Mount it as a named volume or bind mount so state survives image upgrades. A bind-mounted directory must be writable by the image's nonroot user (`chown 65532:65532 ./data`).
-- `/config` holds `rss-er.yaml` and `/sites` holds `*.yaml`, both mounted read-only as directories (a single-file mount misses an editor's save-by-rename). Changing either needs only a container restart, not an image rebuild. A copy of the configs is also baked into the image as a default.
+- `/data` holds the SQLite DB (`/data/feed-me.db`). Mount it as a named volume or bind mount so state survives image upgrades. A bind-mounted directory must be writable by the image's nonroot user (`chown 65532:65532 ./data`).
+- `/config` holds `feed-me.yaml` and `/sites` holds `*.yaml`, both mounted read-only as directories (a single-file mount misses an editor's save-by-rename). Changing either needs only a container restart, not an image rebuild. A copy of the configs is also baked into the image as a default.
 - SQLite runs in WAL mode with `busy_timeout`. There is one writer (the scheduler), and HTTP handlers only read.
 - **Schema migrations** run automatically at startup. The DB records a `schema_version`.
 
 **Networking and the reverse proxy:**
 - The server listens on `:8080` over plain HTTP. The proxy handles TLS.
-- `public_base_url` is set in config or with the `RSS_ER_PUBLIC_BASE_URL` environment variable. It's used for `atom:link rel=self` and OPML links. The app **doesn't** try to infer it from `X-Forwarded-*` headers, so the self-link is always stable and correct.
+- `public_base_url` is set in config or with the `FEED_ME_PUBLIC_BASE_URL` environment variable. It's used for `atom:link rel=self` and OPML links. The app **doesn't** try to infer it from `X-Forwarded-*` headers, so the self-link is always stable and correct.
 - An optional `base_path` handles the case where the proxy mounts the app under a sub-path, for example `/rss/`.
 - Feed responses include `Cache-Control: public, max-age=300`, `ETag` and `Last-Modified`, so the proxy (or a CDN in front of it) can cache them, and readers get `304`s.
 
 **Health and lifecycle:**
-- Distroless has no shell or `curl`, so the healthcheck is a subcommand: `HEALTHCHECK CMD ["/rss-er", "healthcheck"]`. It hits `http://127.0.0.1:8080/healthz`.
+- Distroless has no shell or `curl`, so the healthcheck is a subcommand: `HEALTHCHECK CMD ["/feed-me", "healthcheck"]`. It hits `http://127.0.0.1:8080/healthz`.
 - `/healthz` returns 200 while the process is up. `/readyz` returns 200 only once every site has completed at least one successful run and every one of its feeds can be served. It is deliberately all-or-nothing: a site that stores no items, or whose feed keeps failing its checks, keeps `/readyz` at 503 and names the site, while the other feeds are still served. So route traffic and restarts on `/healthz` (as the `HEALTHCHECK` does), and use `/readyz` to find a broken site.
 - `Last-Modified` is the time a feed's bytes last changed. It is stored with the feed's `ETag`, so a restart that renders the same bytes keeps it.
 - On `SIGTERM`, it finishes the in-flight page fetch, stops the scheduler, drains HTTP connections (10s) and closes the DB cleanly.
 - On startup, a site whose last run is older than its `interval` runs immediately. Otherwise it waits for its next tick. Restarts therefore don't cause a burst of fetches.
 
-**`compose.yaml`** (shipped in the repo). The container config is `deploy/rss-er.yaml`, which puts the store on `/data` and logs JSON. `deploy/` and `sites/` are mounted over the baked-in copies. Shutdown can take up to 40s (30s for the page in flight, 10s for HTTP), so the stop grace period is raised from Docker's default of 10s; with plain `docker run`, pass `--stop-timeout 45`.
+**`compose.yaml`** (shipped in the repo). The container config is `deploy/feed-me.yaml`, which puts the store on `/data` and logs JSON. `deploy/` and `sites/` are mounted over the baked-in copies. Shutdown can take up to 40s (30s for the page in flight, 10s for HTTP), so the stop grace period is raised from Docker's default of 10s; with plain `docker run`, pass `--stop-timeout 45`.
 
 ```yaml
 services:
-  rss-er:
-    image: rss-er:latest
+  feed-me:
+    image: feed-me:latest
     build:
       context: .
       args:
@@ -415,14 +415,14 @@ services:
     restart: unless-stopped
     stop_grace_period: 45s
     environment:
-      RSS_ER_PUBLIC_BASE_URL: https://rss.example.com
+      FEED_ME_PUBLIC_BASE_URL: https://rss.example.com
     volumes:
-      - rss-er-data:/data
+      - feed-me-data:/data
       - ./deploy:/config:ro
       - ./sites:/sites:ro
     expose: ["8080"] # the reverse proxy joins this network; no host port needed
 volumes:
-  rss-er-data:
+  feed-me-data:
 ```
 
 The resulting feed URL is `https://rss.example.com/feeds/claude-blog.xml`.
@@ -436,8 +436,8 @@ The resulting feed URL is `https://rss.example.com/feeds/claude-blog.xml`.
 ## 9. Project layout
 
 ```
-rss-er/
-  cmd/rss-er/main.go
+feed-me/
+  cmd/feed-me/main.go
   internal/
     config/      # YAML load, strict decode, validation, source-spec parsing
     discovery/   # sitemap, index, links strategies
@@ -456,7 +456,7 @@ rss-er/
     claude-blog/ # saved HTML fixtures + sitemap + expected golden feed
     select-dev/  # saved posts/rss.xml (with stega chars intact) + post HTML + golden feed
   deploy/
-    rss-er.yaml  # container config: store on /data, JSON logs
+    feed-me.yaml  # container config: store on /data, JSON logs
   Dockerfile
   compose.yaml
   PLAN.md
@@ -516,14 +516,14 @@ Validators are saved only after a response has been fully processed, so a failed
 
 | # | Deliverable | Done when |
 |---|---|---|
-| **M0** | Skeleton: `go mod init`, CLI scaffold, config load + strict validation + `config lint`, Claude blog YAML | `rss-er config lint` passes on `sites/claude-blog.yaml` and fails usefully on a broken copy |
-| **M1** | Fetcher (rate limit, robots, conditional GET), `sitemap` and `feed` discovery, extractor (jsonld/meta/css/listing), invisible-character stripping, `check` command | `rss-er check --site claude-blog` prints correct title/date/summary/body for 5 fixture posts |
-| **M2** | Normalizer + SQLite store + RSS renderer + `build` | `rss-er build` produces a feed with ≥50 full-text items that **passes the W3C validator with zero errors**; renders correctly in 2 readers |
+| **M0** | Skeleton: `go mod init`, CLI scaffold, config load + strict validation + `config lint`, Claude blog YAML | `feed-me config lint` passes on `sites/claude-blog.yaml` and fails usefully on a broken copy |
+| **M1** | Fetcher (rate limit, robots, conditional GET), `sitemap` and `feed` discovery, extractor (jsonld/meta/css/listing), invisible-character stripping, `check` command | `feed-me check --site claude-blog` prints correct title/date/summary/body for 5 fixture posts |
+| **M2** | Normalizer + SQLite store + RSS renderer + `build` | `feed-me build` produces a feed with ≥50 full-text items that **passes the W3C validator with zero errors**; renders correctly in 2 readers |
 | **M3** | Timestamp policy (first-seen, freezing), incremental refresh, update detection, last-good-feed protection | Running `build` hourly for 48h yields no reordering, no duplicate items, and edits are picked up |
 | **M4** | `run` mode: scheduler + HTTP server with ETag/304, OPML, `/healthz` and `/readyz`, `healthcheck` subcommand; Atom output; Dockerfile + `compose.yaml` (§8.1) | Container running behind the reverse proxy, with a feed reader subscribed through the public URL; new posts arrive within one interval; state survives `docker compose down && up` |
 | **M5** | Second site, select.dev (§2.2, §4.4), to prove the config abstraction. It uses `feed` discovery, `listing` dates and meta-only extraction, which are different paths from the Claude blog. | `sites/select-dev.yaml` added with **zero Go changes**; the feed passes the W3C validator; titles contain no zero-width characters; bodies include code blocks and images |
 
-*Status (2026-09-24):* M0–M5 are implemented. M5 was checked against the live site: `rss-er validate --site select-dev --w3c` reports 0 errors for both the RSS and Atom feeds, and its only warning is `SelfDoesntMatchLocation`, because the feed is posted as raw data. No title has a zero-width character; the only ones are two lone U+200B the author put around links in post bodies, which §6a keeps. The 50 items contain 175 `<pre>` blocks and 230 images. No Go code is specific to select.dev. These exit criteria still need to be checked outside the code: subscribing in real readers (M2), 48 hours of hourly builds (M3), and the deployment behind the reverse proxy (M4).
+*Status (2026-09-24):* M0–M5 are implemented. M5 was checked against the live site: `feed-me validate --site select-dev --w3c` reports 0 errors for both the RSS and Atom feeds, and its only warning is `SelfDoesntMatchLocation`, because the feed is posted as raw data. No title has a zero-width character; the only ones are two lone U+200B the author put around links in post bodies, which §6a keeps. The 50 items contain 175 `<pre>` blocks and 230 images. No Go code is specific to select.dev. These exit criteria still need to be checked outside the code: subscribing in real readers (M2), 48 hours of hourly builds (M3), and the deployment behind the reverse proxy (M4).
 
 ---
 
@@ -533,7 +533,7 @@ Validators are saved only after a response has been fully processed, so a failed
 
 | Topic | Decision |
 |---|---|
-| Hosting | Long-running Docker container (`rss-er run`) behind the existing reverse proxy. See §8.1. |
+| Hosting | Long-running Docker container (`feed-me run`) behind the existing reverse proxy. See §8.1. |
 | Feed size | 50 items (`max_items: 50`). No full-history feed. |
 | Storage | SQLite on a mounted `/data` volume, holding all state: items, HTTP cache and run state. |
 | Languages | English only. Localized paths such as `/ja/blog` are excluded by the discovery regex. |

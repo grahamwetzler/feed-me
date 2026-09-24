@@ -2,13 +2,13 @@ package config
 
 import "gopkg.in/yaml.v3"
 
-// Global is rss-er.yaml (§4.1). Relative paths resolve against the file's directory.
+// Global is feed-me.yaml (§4.1). Relative paths resolve against the file's directory.
 type Global struct {
 	SitesDir      string `yaml:"sites_dir"`
 	StorePath     string `yaml:"store_path"`
 	OutDir        string `yaml:"out_dir"`
 	Listen        string `yaml:"listen"`
-	PublicBaseURL string `yaml:"public_base_url"` // overridden by RSS_ER_PUBLIC_BASE_URL
+	PublicBaseURL string `yaml:"public_base_url"` // overridden by FEED_ME_PUBLIC_BASE_URL
 	BasePath      string `yaml:"base_path"`
 	ContactURL    string `yaml:"contact_url"` // goes in the User-Agent
 	UserAgent     string `yaml:"user_agent"`  // replaces the default User-Agent entirely
@@ -34,12 +34,12 @@ type GlobalFetch struct {
 
 const (
 	DefaultSitesDir     = "sites"
-	DefaultStorePath    = "rss-er.db"
+	DefaultStorePath    = "feed-me.db"
 	DefaultOutDir       = "out"
 	DefaultListen       = ":8080"
 	DefaultBasePath     = "/"
 	DefaultRate         = "1/s"
 	DefaultTimeout      = "20s"
 	DefaultMaxBodyBytes = 10 << 20
-	EnvPublicBaseURL    = "RSS_ER_PUBLIC_BASE_URL"
+	EnvPublicBaseURL    = "FEED_ME_PUBLIC_BASE_URL"
 )

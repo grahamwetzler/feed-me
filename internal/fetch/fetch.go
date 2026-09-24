@@ -57,7 +57,7 @@ func (e *StatusError) Error() string {
 var ErrDisallowed = errors.New("disallowed by robots.txt")
 
 // Product is the User-Agent product token, which robots.txt groups match against.
-const Product = "rss-er"
+const Product = "feed-me"
 
 // Client is shared by all sites so per-host limits hold across them.
 type Client struct {

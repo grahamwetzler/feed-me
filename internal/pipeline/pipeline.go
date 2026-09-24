@@ -17,12 +17,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"rss-er/internal/config"
-	"rss-er/internal/discovery"
-	"rss-er/internal/extract"
-	"rss-er/internal/fetch"
-	"rss-er/internal/normalize"
-	"rss-er/internal/store"
+	"feed-me/internal/config"
+	"feed-me/internal/discovery"
+	"feed-me/internal/extract"
+	"feed-me/internal/fetch"
+	"feed-me/internal/normalize"
+	"feed-me/internal/store"
 )
 
 // Stats summarize one run; they are logged as one line per run (§8, Observability).

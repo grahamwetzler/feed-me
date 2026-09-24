@@ -9,7 +9,7 @@
   </author>
   <link rel="self" type="application/atom+xml" href="https://rss.example.com/feeds/claude-blog.atom"></link>
   <link rel="alternate" type="text/html" href="https://claude.com/blog"></link>
-  <generator>rss-er/test</generator>
+  <generator>feed-me/test</generator>
   <entry>
     <id>https://claude.com/blog/t-rowe-price-brings-more-of-claude-to-its-investment-process</id>
     <title type="text">T. Rowe Price Group brings more of Claude to its investment process</title>

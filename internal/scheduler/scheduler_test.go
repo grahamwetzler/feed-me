@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"rss-er/internal/config"
+	"feed-me/internal/config"
 )
 
 func site(id string, interval time.Duration) *config.Site {

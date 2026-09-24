@@ -13,10 +13,10 @@ import (
 	"syscall"
 	"time"
 
-	"rss-er/internal/config"
-	"rss-er/internal/fetch"
-	"rss-er/internal/pipeline"
-	"rss-er/internal/store"
+	"feed-me/internal/config"
+	"feed-me/internal/fetch"
+	"feed-me/internal/pipeline"
+	"feed-me/internal/store"
 )
 
 // env is what the build and validate commands share.
@@ -37,14 +37,14 @@ func open(ctx context.Context, cfgPath, siteID string, stderr io.Writer) (*env, 
 	if siteID != "" {
 		s := cfg.Site(siteID)
 		if s == nil {
-			fmt.Fprintf(stderr, "rss-er: no site %q in %s\n", siteID, cfg.Global.SitesDir)
+			fmt.Fprintf(stderr, "feed-me: no site %q in %s\n", siteID, cfg.Global.SitesDir)
 			return nil, 2
 		}
 		sites = []*config.Site{s}
 	}
 	st, err := store.Open(ctx, cfg.Global.StorePath)
 	if err != nil {
-		fmt.Fprintf(stderr, "rss-er: %v\n", err)
+		fmt.Fprintf(stderr, "feed-me: %v\n", err)
 		return nil, 1
 	}
 	return &env{cfg: cfg, store: st, log: newLogger(cfg.Global.Log, stderr), sites: sites}, 0

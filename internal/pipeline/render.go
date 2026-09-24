@@ -6,12 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"rss-er/internal/config"
-	"rss-er/internal/feed"
-	"rss-er/internal/store"
+	"feed-me/internal/config"
+	"feed-me/internal/feed"
+	"feed-me/internal/store"
 )
 
-// Format is a feed format rss-er serves: RSS 2.0 (§7.1) or Atom 1.0 (§7.2).
+// Format is a feed format feed-me serves: RSS 2.0 (§7.1) or Atom 1.0 (§7.2).
 type Format struct {
 	Ext         string // file extension, with the dot
 	ContentType string

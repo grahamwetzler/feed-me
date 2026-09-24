@@ -14,7 +14,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 
-	"rss-er/internal/fetch/fetchtest"
+	"feed-me/internal/fetch/fetchtest"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -66,10 +66,10 @@ func runCheck(t *testing.T, args ...string) []digest {
 	t.Helper()
 	transport, rateOverride = fixtures(t), 1000
 	t.Cleanup(func() { transport, rateOverride = nil, 0 })
-	t.Setenv("RSS_ER_PUBLIC_BASE_URL", "")
+	t.Setenv("FEED_ME_PUBLIC_BASE_URL", "")
 
 	var stdout, stderr bytes.Buffer
-	code := run(append([]string{"check", "--config", root + "/rss-er.yaml", "--json"}, args...), &stdout, &stderr)
+	code := run(append([]string{"check", "--config", root + "/feed-me.yaml", "--json"}, args...), &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("exit %d\nstderr: %s\nstdout: %s", code, stderr.String(), stdout.String())
 	}
@@ -135,10 +135,10 @@ func golden(t *testing.T, name string, got []digest) {
 	}
 	want, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("%v (run go test ./cmd/rss-er -update to create it)", err)
+		t.Fatalf("%v (run go test ./cmd/feed-me -update to create it)", err)
 	}
 	if !bytes.Equal(want, data) {
-		t.Errorf("%s differs from golden output; run go test ./cmd/rss-er -update and review the diff.\ngot:\n%s", path, data)
+		t.Errorf("%s differs from golden output; run go test ./cmd/feed-me -update and review the diff.\ngot:\n%s", path, data)
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 
 func TestMigrateAndRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "sub", "rss-er.db")
+	path := filepath.Join(t.TempDir(), "sub", "feed-me.db")
 	s, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestMigrateAndRoundTrip(t *testing.T) {
 
 func TestRefusesNewerSchema(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "rss-er.db")
+	path := filepath.Join(t.TempDir(), "feed-me.db")
 	s, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)

@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"rss-er/internal/config"
-	"rss-er/internal/pipeline"
-	"rss-er/internal/scheduler"
-	"rss-er/internal/server"
+	"feed-me/internal/config"
+	"feed-me/internal/pipeline"
+	"feed-me/internal/scheduler"
+	"feed-me/internal/server"
 )
 
 // listening, when set, is told the address run serves on (for tests that listen on port 0).
@@ -52,7 +52,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	}
 	ln, err := net.Listen("tcp", g.Listen)
 	if err != nil {
-		fmt.Fprintf(stderr, "rss-er: %v\n", err)
+		fmt.Fprintf(stderr, "feed-me: %v\n", err)
 		return 1
 	}
 	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
@@ -157,7 +157,7 @@ func cmdHealthcheck(args []string, stdout, stderr io.Writer) int {
 			return reportErrors(err, stderr)
 		}
 		if *url, err = healthURL(g.Listen, g.BasePath); err != nil {
-			fmt.Fprintf(stderr, "rss-er: %v\n", err)
+			fmt.Fprintf(stderr, "feed-me: %v\n", err)
 			return 2
 		}
 	}

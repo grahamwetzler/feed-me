@@ -10,7 +10,7 @@ import (
 
 	"golang.org/x/net/html/charset"
 
-	"rss-er/internal/fetch"
+	"feed-me/internal/fetch"
 )
 
 const (

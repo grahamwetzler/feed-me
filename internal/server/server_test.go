@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"rss-er/internal/config"
-	"rss-er/internal/feed"
-	"rss-er/internal/pipeline"
-	"rss-er/internal/store"
+	"feed-me/internal/config"
+	"feed-me/internal/feed"
+	"feed-me/internal/pipeline"
+	"feed-me/internal/store"
 )
 
 type fixture struct {
@@ -34,7 +34,7 @@ func newFixture(t *testing.T, basePath string) *fixture {
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
-	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "rss-er.db"))
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "feed-me.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func newFixture(t *testing.T, basePath string) *fixture {
 		Title: "A post", Summary: "Summary", ContentHTML: "<p>Body</p>", Published: at, FirstSeen: at, LastFetched: at, ContentHash: "h",
 	}))
 	must(t, st.PutSiteState(ctx, site.ID, store.SiteState{LastRun: at, LastChange: at}))
-	srv := New(g, []*config.Site{site}, st, "rss-er/test", slog.New(slog.DiscardHandler))
+	srv := New(g, []*config.Site{site}, st, "feed-me/test", slog.New(slog.DiscardHandler))
 	f := &fixture{clock: at.Add(time.Hour), srv: srv, site: site, store: st, h: srv.Handler()}
 	srv.now = func() time.Time { return f.clock }
 	return f
@@ -198,7 +198,7 @@ func TestLastModifiedSurvivesRestart(t *testing.T) {
 	first := f.get(t, "/feeds/claude-blog.atom").Header()
 
 	restart := func() {
-		f.srv = New(f.srv.global, f.srv.sites, f.store, "rss-er/test", slog.New(slog.DiscardHandler))
+		f.srv = New(f.srv.global, f.srv.sites, f.store, "feed-me/test", slog.New(slog.DiscardHandler))
 		f.srv.now = func() time.Time { return f.clock }
 		f.h = f.srv.Handler()
 		f.clock = f.clock.Add(time.Hour)
