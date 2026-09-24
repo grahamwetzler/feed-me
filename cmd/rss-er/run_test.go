@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"io"
 	"net/http"
 	"os"
@@ -11,6 +13,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"rss-er/internal/store"
 )
 
 // syncBuffer is a bytes.Buffer safe for the run goroutine's logger.
@@ -124,11 +128,48 @@ func TestHealthURL(t *testing.T) {
 		"10.0.0.5:8081":  "http://10.0.0.5:8081/healthz",
 		"localhost:8082": "http://localhost:8082/healthz",
 	} {
-		if got := healthURL(listen, "/"); got != want {
-			t.Errorf("healthURL(%q) = %q, want %q", listen, got, want)
+		if got, err := healthURL(listen, "/"); got != want || err != nil {
+			t.Errorf("healthURL(%q) = %q, %v; want %q", listen, got, err, want)
 		}
 	}
-	if got := healthURL(":8080", "/rss/"); got != "http://127.0.0.1:8080/rss/healthz" {
+	if got, _ := healthURL(":8080", "/rss/"); got != "http://127.0.0.1:8080/rss/healthz" {
 		t.Errorf("with base_path: %q", got)
+	}
+	if got, err := healthURL("9000", "/"); err == nil {
+		t.Errorf("bare port: %q, want an error rather than a guess", got)
+	}
+}
+
+// A scheduler that can't start must end the process, not leave it serving
+// stale feeds behind a green healthcheck.
+func TestRunExitsWhenSchedulerFails(t *testing.T) {
+	t.Setenv("RSS_ER_PUBLIC_BASE_URL", "")
+	dir := t.TempDir()
+	db := filepath.Join(dir, "rss-er.db")
+	st, err := store.Open(context.Background(), db)
+	must(t, err)
+	must(t, st.Close())
+	conn, err := sql.Open("sqlite", db)
+	must(t, err)
+	_, err = conn.Exec("DROP TABLE site_state")
+	must(t, err)
+	must(t, conn.Close())
+
+	sites, err := filepath.Abs(filepath.Join(root, "sites"))
+	must(t, err)
+	cfg := filepath.Join(dir, "rss-er.yaml")
+	must(t, os.WriteFile(cfg, []byte("public_base_url: https://rss.example.com\nlisten: 127.0.0.1:0\nsites_dir: "+sites+
+		"\nstore_path: "+db+"\nlog: {format: text}\n"), 0o644))
+
+	var stdout, stderr syncBuffer
+	done := make(chan int, 1)
+	go func() { done <- run([]string{"run", "--config", cfg}, &stdout, &stderr) }()
+	select {
+	case code := <-done:
+		if code != 1 || !strings.Contains(stderr.String(), "scheduler stopped") {
+			t.Errorf("exit %d\n%s", code, stderr.String())
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("run kept going without a scheduler")
 	}
 }

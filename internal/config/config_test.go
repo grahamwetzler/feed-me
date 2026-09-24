@@ -298,3 +298,17 @@ item: {title: [css:h1], content: {selector: article}}
 		t.Fatalf("got %v", errs)
 	}
 }
+
+func TestListenNeedsAPort(t *testing.T) {
+	t.Setenv(EnvPublicBaseURL, "")
+	for listen, ok := range map[string]bool{":8080": true, "127.0.0.1:9000": true, "[::]:80": true, "9000": false, "localhost": false, "localhost:": false} {
+		path := filepath.Join(t.TempDir(), "rss-er.yaml")
+		if err := os.WriteFile(path, []byte("public_base_url: https://rss.example.com\nlisten: \""+listen+"\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := LoadGlobal(path)
+		if (err == nil) != ok || (err != nil && !strings.Contains(err.Error(), "listen")) {
+			t.Errorf("listen %q: err = %v", listen, err)
+		}
+	}
+}

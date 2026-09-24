@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -288,6 +289,9 @@ func loadGlobal(path string) (*Global, Errors) {
 	g.StorePath = resolve(dir, orDefault(g.StorePath, DefaultStorePath))
 	g.OutDir = resolve(dir, orDefault(g.OutDir, DefaultOutDir))
 	g.Listen = orDefault(g.Listen, DefaultListen)
+	if _, port, err := net.SplitHostPort(g.Listen); err != nil || port == "" {
+		v.err(p("listen"), "must be host:port or :port, got %q", g.Listen)
+	}
 
 	if env := os.Getenv(EnvPublicBaseURL); env != "" {
 		g.PublicBaseURL = env

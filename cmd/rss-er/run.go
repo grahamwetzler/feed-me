@@ -21,6 +21,8 @@ import (
 // listening, when set, is told the address run serves on (for tests that listen on port 0).
 var listening func(addr string)
 
+// Shutdown takes at most stopTimeout + drainTimeout; compose.yaml's
+// stop_grace_period must leave room for both.
 const (
 	drainTimeout = 10 * time.Second // for open HTTP connections at shutdown
 	stopTimeout  = 30 * time.Second // for the page in flight at shutdown
@@ -93,7 +95,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	scheduled := make(chan error, 1)
 	go func() { scheduled <- sched.Loop(ctx) }()
 
-	failed := false
+	failed, schedDone := false, false
 	select {
 	case <-ctx.Done():
 		e.log.Info("shutting down")
@@ -101,14 +103,22 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		e.log.Error("http server stopped", "err", err)
 		failed = true
 		stop()
+	case err := <-scheduled:
+		// Without the scheduler, feeds would silently stop refreshing while
+		// /healthz stays green; exit so the container is restarted.
+		e.log.Error("scheduler stopped; exiting", "err", err)
+		failed, schedDone = true, true
+		stop()
 	}
 	close(stopRuns)
-	timer := time.AfterFunc(stopTimeout, cancelRuns)
-	if err := <-scheduled; err != nil {
-		e.log.Error("scheduler", "err", err)
-		failed = true
+	if !schedDone {
+		timer := time.AfterFunc(stopTimeout, cancelRuns)
+		if err := <-scheduled; err != nil {
+			e.log.Error("scheduler", "err", err)
+			failed = true
+		}
+		timer.Stop()
 	}
-	timer.Stop()
 
 	dctx, cancel := context.WithTimeout(context.Background(), drainTimeout)
 	defer cancel()
@@ -134,7 +144,10 @@ func cmdHealthcheck(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return reportErrors(err, stderr)
 		}
-		*url = healthURL(g.Listen, g.BasePath)
+		if *url, err = healthURL(g.Listen, g.BasePath); err != nil {
+			fmt.Fprintf(stderr, "rss-er: %v\n", err)
+			return 2
+		}
 	}
 	hc := &http.Client{Timeout: 5 * time.Second}
 	resp, err := hc.Get(*url)
@@ -152,13 +165,13 @@ func cmdHealthcheck(args []string, stdout, stderr io.Writer) int {
 }
 
 // healthURL is the loopback /healthz URL for a listen address such as ":8080".
-func healthURL(listen, basePath string) string {
+func healthURL(listen, basePath string) (string, error) {
 	host, port, err := net.SplitHostPort(listen)
 	if err != nil {
-		host, port = "", "8080"
+		return "", fmt.Errorf("listen address %q: %w", listen, err)
 	}
 	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
 		host = "127.0.0.1"
 	}
-	return "http://" + net.JoinHostPort(host, port) + basePath + "healthz"
+	return "http://" + net.JoinHostPort(host, port) + basePath + "healthz", nil
 }
