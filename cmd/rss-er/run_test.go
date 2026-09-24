@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -174,27 +175,55 @@ func TestRunExitsWhenSchedulerFails(t *testing.T) {
 	}
 }
 
-// A signal that reaches the scheduler before run's select sees it is still an
-// ordinary shutdown: both channels are ready then, and either may be picked.
-func TestRunSignalRacingSchedulerExitsCleanly(t *testing.T) {
+// Loop returns nil after a signal, which may win run's select over
+// ctx.Done; only an error, or a return with ctx still live, is a failure.
+func TestSchedulerFailed(t *testing.T) {
+	live := context.Background()
+	done, cancel := context.WithCancel(live)
+	cancel()
+	for _, c := range []struct {
+		ctx  context.Context
+		err  error
+		want bool
+	}{
+		{done, nil, false},
+		{done, errors.New("store"), true},
+		{live, nil, true},
+		{live, errors.New("store"), true},
+	} {
+		if got := schedulerFailed(c.ctx, c.err); got != c.want {
+			t.Errorf("schedulerFailed(ctx err %v, %v) = %v, want %v", c.ctx.Err(), c.err, got, c.want)
+		}
+	}
+}
+
+// A SIGTERM right after startup, while sites are still being scheduled, is
+// an ordinary shutdown.
+func TestRunEarlySignalExitsCleanly(t *testing.T) {
 	transport, rateOverride = fixtures(t), 1000
 	t.Setenv("RSS_ER_PUBLIC_BASE_URL", "")
 	listening = func(string) {
-		syscall.Kill(os.Getpid(), syscall.SIGTERM)
-		time.Sleep(100 * time.Millisecond) // lets the scheduler see it and return
+		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+			t.Error(err)
+		}
 	}
 	t.Cleanup(func() { transport, rateOverride, listening = nil, 0, nil })
 
+	dir := t.TempDir()
 	sites, err := filepath.Abs(filepath.Join(root, "sites"))
 	must(t, err)
-	for i := range 8 {
-		dir := t.TempDir()
-		cfg := filepath.Join(dir, "rss-er.yaml")
-		must(t, os.WriteFile(cfg, []byte("public_base_url: https://rss.example.com\nlisten: 127.0.0.1:0\nsites_dir: "+sites+
-			"\nstore_path: "+filepath.Join(dir, "rss-er.db")+"\nlog: {format: text}\n"), 0o644))
-		var stdout, stderr syncBuffer
-		if code := run([]string{"run", "--config", cfg}, &stdout, &stderr); code != 0 || strings.Contains(stderr.String(), "scheduler") {
-			t.Fatalf("attempt %d: exit %d\n%s", i, code, stderr.String())
+	cfg := filepath.Join(dir, "rss-er.yaml")
+	must(t, os.WriteFile(cfg, []byte("public_base_url: https://rss.example.com\nlisten: 127.0.0.1:0\nsites_dir: "+sites+
+		"\nstore_path: "+filepath.Join(dir, "rss-er.db")+"\nlog: {format: text}\n"), 0o644))
+	var stdout, stderr syncBuffer
+	done := make(chan int, 1)
+	go func() { done <- run([]string{"run", "--config", cfg}, &stdout, &stderr) }()
+	select {
+	case code := <-done:
+		if code != 0 || strings.Contains(stderr.String(), "scheduler") {
+			t.Errorf("exit %d\n%s", code, stderr.String())
 		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("run did not exit after SIGTERM")
 	}
 }

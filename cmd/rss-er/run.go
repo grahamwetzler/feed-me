@@ -105,8 +105,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		stop()
 	case err := <-scheduled:
 		schedDone = true
-		if err == nil && ctx.Err() != nil {
-			// The signal reached the scheduler before this select saw it.
+		if !schedulerFailed(ctx, err) {
 			e.log.Info("shutting down")
 			break
 		}
@@ -135,6 +134,13 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// schedulerFailed reports whether the scheduler returning err is a failure
+// rather than a shutdown: Loop returns nil once ctx is done, and a signal can
+// reach it before run's select sees ctx.Done.
+func schedulerFailed(ctx context.Context, err error) bool {
+	return err != nil || ctx.Err() == nil
 }
 
 // cmdHealthcheck probes /healthz on the local server, for Docker's
