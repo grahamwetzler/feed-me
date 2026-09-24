@@ -1,0 +1,20 @@
+# Global settings (PLAN.md §4.1). Relative paths resolve against this file's directory.
+sites_dir: sites
+store_path: rss-er.db
+out_dir: out
+listen: ":8080"
+
+# Used for each feed's rel=self link and the OPML export. Override with RSS_ER_PUBLIC_BASE_URL.
+public_base_url: http://localhost:8080
+base_path: /
+
+# Appended to the User-Agent: rss-er/<version> (+<contact_url>)
+# contact_url: https://example.com/rss-er
+
+log:
+  format: text   # json in the container
+  level: info
+
+fetch:
+  rate: 1/s
+  timeout: 20s

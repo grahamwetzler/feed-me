@@ -1,0 +1,38 @@
+id: claude-blog
+version: 1
+
+channel:
+  title: Claude Blog
+  link: https://claude.com/blog
+  description: Product news, customer stories, and guides from the Claude team at Anthropic.
+  language: en-us
+  author: Anthropic
+  ttl: 60
+
+schedule:
+  interval: 1h
+  max_items: 50
+  timezone: America/Los_Angeles
+
+discovery:
+  - type: sitemap
+    url: https://claude.com/sitemap.xml
+    include: ['^https://claude\.com/blog/[^/?#]+$']   # English only: excludes /ja/blog, /de/blog, etc.
+
+item:
+  title:   [jsonld:BlogPosting.headline, meta:og:title, css:h1]
+  summary: [jsonld:BlogPosting.description, meta:description]
+  image:   [jsonld:BlogPosting.image, meta:og:image]
+  published:
+    sources: [jsonld:BlogPosting.datePublished]
+    layouts: ['Jan 2, 2006', 'January 2, 2006']
+  updated:
+    sources: [jsonld:BlogPosting.dateModified]
+    layouts: ['Jan 2, 2006', 'January 2, 2006']
+  content:
+    # Every match is kept, in document order: some posts (the "is-cc" layout) split
+    # the article across two rich-text blocks. The hidden, empty CMS slot carries
+    # w-condition-invisible either on itself or on a wrapper; anchoring on the
+    # content wrap's direct children plus :not() excludes both forms.
+    selector: '.blog_post_content_wrap > .u-rich-text-blog.w-richtext:not(.w-condition-invisible)'
+    exclude: ['script', 'style', 'noscript']

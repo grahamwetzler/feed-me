@@ -1,0 +1,37 @@
+id: select-dev
+version: 1
+
+channel:
+  title: SELECT Blog
+  link: https://select.dev/posts
+  description: Articles on Snowflake and Databricks cost optimization, performance, and data engineering from the SELECT team.
+  language: en-us
+  author: SELECT
+  ttl: 60
+
+schedule:
+  interval: 1h
+  max_items: 50
+  timezone: UTC            # feed dates are already exact and in GMT
+
+discovery:
+  - type: feed
+    url: https://select.dev/posts/rss.xml
+    include: ['^https://select\.dev/posts/[^/?#]+$']
+
+item:
+  # Their feed's titles and descriptions carry invisible stega characters, so
+  # prefer the page's clean meta tags. listing:* comes last, as a fallback only.
+  title:   [meta:og:title, listing:title]
+  summary: [meta:og:description, meta:description, listing:description]
+  author:  [meta:article:author]
+  image:   [meta:og:image]
+  published:
+    # Exact timestamps come from their feed. The visible byline is date-only.
+    sources: [listing:published, 'css:p.uppercase > span:last-child']
+    layouts: ['Monday, January 2, 2006']
+  content:
+    selector: 'div[class~="prose-p:!my-0"]'
+    # Code blocks number every line with a <span class="select-none">; drop them
+    # or each line of code starts with its number.
+    exclude: ['script', 'style', 'noscript', 'button', 'pre .select-none']

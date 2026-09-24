@@ -1,0 +1,7 @@
+bin/
+out/
+*.db
+*.db-wal
+*.db-shm
+# roborev snapshots
+/.roborev/
