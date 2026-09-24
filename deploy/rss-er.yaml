@@ -1,7 +1,8 @@
 # Container config (PLAN.md §8.1). The image bakes this in at /config/rss-er.yaml
-# with the shipped sites in /config/sites; compose.yaml mounts the repo's
-# copies over both, so editing a site needs only a restart.
-sites_dir: sites
+# and the shipped sites at /sites; compose.yaml mounts this directory and the
+# repo's sites/ over both, so an edit to either needs only a restart.
+# ../sites is /sites in the container and the repo's sites/ outside it.
+sites_dir: ../sites
 store_path: /data/rss-er.db
 listen: ":8080"
 

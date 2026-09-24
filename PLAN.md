@@ -384,8 +384,8 @@ The service runs as a long-lived `rss-er run` container behind the user's existi
 - CA certificates come with the distroless base, and the timezone database is embedded with the `time/tzdata` import, so `America/Los_Angeles` resolves inside the container.
 
 **Volumes and config:**
-- `/data` holds the SQLite DB (`/data/rss-er.db`). Mount it as a named volume or bind mount so state survives image upgrades.
-- `/config` holds `rss-er.yaml` and `sites/*.yaml`, mounted read-only. Changing a site config needs only a container restart, not an image rebuild. A copy of the configs is also baked into the image as a default.
+- `/data` holds the SQLite DB (`/data/rss-er.db`). Mount it as a named volume or bind mount so state survives image upgrades. A bind-mounted directory must be writable by the image's nonroot user (`chown 65532:65532 ./data`).
+- `/config` holds `rss-er.yaml` and `/sites` holds `*.yaml`, both mounted read-only as directories (a single-file mount misses an editor's save-by-rename). Changing either needs only a container restart, not an image rebuild. A copy of the configs is also baked into the image as a default.
 - SQLite runs in WAL mode with `busy_timeout`. There is one writer (the scheduler), and HTTP handlers only read.
 - **Schema migrations** run automatically at startup. The DB records a `schema_version`.
 
@@ -401,7 +401,7 @@ The service runs as a long-lived `rss-er run` container behind the user's existi
 - On `SIGTERM`, it finishes the in-flight page fetch, stops the scheduler, drains HTTP connections (10s) and closes the DB cleanly.
 - On startup, a site whose last run is older than its `interval` runs immediately. Otherwise it waits for its next tick. Restarts therefore don't cause a burst of fetches.
 
-**`compose.yaml`** (shipped in the repo). The container config is `deploy/rss-er.yaml`, which puts the store on `/data` and logs JSON. It and `sites/` are mounted over the baked-in copies:
+**`compose.yaml`** (shipped in the repo). The container config is `deploy/rss-er.yaml`, which puts the store on `/data` and logs JSON. `deploy/` and `sites/` are mounted over the baked-in copies. Shutdown can take up to 40s (30s for the page in flight, 10s for HTTP), so the stop grace period is raised from Docker's default of 10s; with plain `docker run`, pass `--stop-timeout 45`.
 
 ```yaml
 services:
@@ -412,12 +412,13 @@ services:
       args:
         VERSION: ${VERSION:-dev}
     restart: unless-stopped
+    stop_grace_period: 45s
     environment:
       RSS_ER_PUBLIC_BASE_URL: https://rss.example.com
     volumes:
       - rss-er-data:/data
-      - ./deploy/rss-er.yaml:/config/rss-er.yaml:ro
-      - ./sites:/config/sites:ro
+      - ./deploy:/config:ro
+      - ./sites:/sites:ro
     expose: ["8080"] # the reverse proxy joins this network; no host port needed
 volumes:
   rss-er-data:

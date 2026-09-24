@@ -13,8 +13,9 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}"
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/rss-er /rss-er
 COPY deploy/rss-er.yaml /config/rss-er.yaml
-COPY sites /config/sites
-# A named volume copies this directory's owner, so the nonroot user can write the store.
+COPY sites /sites
+# A named volume copies this directory's owner, so the nonroot user can write
+# the store. A bind-mounted /data must be writable by uid 65532 itself.
 COPY --from=build --chown=nonroot:nonroot /out/data /data
 ENV RSS_ER_CONFIG=/config/rss-er.yaml
 VOLUME /data
