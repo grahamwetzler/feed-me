@@ -28,8 +28,12 @@ var nonPublic = []netip.Prefix{
 	netip.MustParsePrefix("192.0.0.0/24"),  // IETF protocol assignments
 	netip.MustParsePrefix("198.18.0.0/15"), // benchmarking
 	netip.MustParsePrefix("240.0.0.0/4"),   // reserved, and broadcast
-	netip.MustParsePrefix("64:ff9b::/96"),  // NAT64, which can reach any IPv4 address
-	netip.MustParsePrefix("2002::/16"),     // 6to4, likewise
+	// IPv6 ranges that embed an IPv4 address and can reach it.
+	netip.MustParsePrefix("::/96"),          // IPv4-compatible (deprecated)
+	netip.MustParsePrefix("64:ff9b::/96"),   // NAT64
+	netip.MustParsePrefix("64:ff9b:1::/48"), // local-use NAT64
+	netip.MustParsePrefix("2001::/32"),      // Teredo
+	netip.MustParsePrefix("2002::/16"),      // 6to4
 }
 
 // publicAddr reports whether a is a globally routable unicast address.

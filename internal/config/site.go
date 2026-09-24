@@ -44,6 +44,10 @@ type Fetch struct {
 	Timeout       Duration          `yaml:"timeout"`
 	Headers       map[string]string `yaml:"headers"`
 	RespectRobots *bool             `yaml:"respect_robots"`
+
+	// HeaderHosts are extra hosts (host or host:port) that get Headers,
+	// besides those of the discovery URLs.
+	HeaderHosts []string `yaml:"header_hosts"`
 }
 
 // Discovery types (§3.1).

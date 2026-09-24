@@ -1,8 +1,10 @@
 package fetch
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -304,6 +306,50 @@ func TestRedirectToAnotherHostDropsConfiguredHeaders(t *testing.T) {
 	}
 	if dst := checkHeaders(t, reqs()); !slices.Contains(dst, "/robots.txt") || !slices.Contains(dst, "/a") {
 		t.Errorf("dst.test requests = %v, want its robots.txt and /a", dst)
+	}
+}
+
+func TestRedirectToAnotherHostKeepsFetcherHeaders(t *testing.T) {
+	type seen struct{ host, ua, inm, extra string }
+	var mu sync.Mutex
+	var reqs []seen
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		reqs = append(reqs, seen{r.Host, r.UserAgent(), r.Header.Get("If-None-Match"), r.Header.Get("X-Extra")})
+		mu.Unlock()
+		if r.Host == "src.test" {
+			http.Redirect(w, r, "http://dst.test/a", http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	var logs bytes.Buffer
+	c := multiHostClient(srv)
+	c.Log = slog.New(slog.NewTextHandler(&logs, nil))
+	o := fast
+	o.RespectRobots = false
+	// User-Agent and If-None-Match are the fetcher's own; configuring them
+	// doesn't make them the site's to strip.
+	o.Headers = map[string]string{"User-Agent": "spoofed", "If-None-Match": "cfg", "X-Extra": "yes"}
+	o.HeaderHosts = []string{"src.test"}
+	for range 2 {
+		if _, err := c.Site(o).Fetch(context.Background(), Request{URL: "http://src.test/r", ETag: `"v1"`}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for _, r := range reqs {
+		if r.ua != "ua" || r.inm != `"v1"` {
+			t.Errorf("%s: User-Agent %q, If-None-Match %q; want the fetcher's", r.host, r.ua, r.inm)
+		}
+		if want := map[bool]string{true: "yes"}[r.host == "src.test"]; r.extra != want {
+			t.Errorf("%s: X-Extra = %q, want %q", r.host, r.extra, want)
+		}
+	}
+	if n := strings.Count(logs.String(), "host=dst.test"); n != 1 {
+		t.Errorf("withheld-headers warning logged %d times for dst.test, want once:\n%s", n, logs.String())
 	}
 }
 

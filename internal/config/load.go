@@ -427,6 +427,11 @@ func LoadSite(path string, g *Global) (*Site, Errors) {
 			v.err(p("fetch", "headers", k), "invalid header value %q (no control characters or newlines)", val)
 		}
 	}
+	for i, h := range s.Fetch.HeaderHosts {
+		if u, err := url.Parse("//" + h); err != nil || h == "" || u.Host != h || u.Port() != "" && u.Hostname() == "" {
+			v.err(p("fetch", "header_hosts", i), "must be a host or host:port, like www.example.com, got %q", h)
+		}
+	}
 
 	// Discovery.
 	if len(s.Discovery) == 0 {

@@ -52,7 +52,7 @@ func siteFetcher(c *fetch.Client, s *config.Site) fetch.Fetcher {
 		Timeout:       s.Fetch.Timeout.D,
 		Headers:       s.Fetch.Headers,
 		RespectRobots: s.RespectRobots(),
-		HeaderHosts:   siteHosts(s),
+		HeaderHosts:   append(siteHosts(s), s.Fetch.HeaderHosts...),
 	})
 }
 

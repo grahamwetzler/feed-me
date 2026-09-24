@@ -299,6 +299,27 @@ item: {title: [css:h1], content: {selector: article}}
 	}
 }
 
+func TestHeaderHostsValidation(t *testing.T) {
+	for host, ok := range map[string]bool{
+		"www.example.com": true, "example.com:8443": true, "[::1]:8080": true,
+		"": false, "https://example.com": false, "example.com/blog": false, "user@example.com": false, ":8080": false,
+	} {
+		g, sp := writeSite(t, "hh.yaml", `id: hh
+version: 1
+channel: {title: T, link: https://example.com, description: D}
+fetch: {header_hosts: ["`+host+`"]}
+discovery: [{type: links, urls: [https://example.com/a]}]
+item: {title: [css:h1], content: {selector: article}}
+`)
+		gl, err := LoadGlobal(g)
+		must(t, err)
+		_, errs := LoadSite(sp, gl)
+		if (len(errs) == 0) != ok || (!ok && !strings.Contains(errs.Error(), "fetch.header_hosts[0]")) {
+			t.Errorf("header_hosts %q: errs = %v", host, errs)
+		}
+	}
+}
+
 func TestListenNeedsAPort(t *testing.T) {
 	t.Setenv(EnvPublicBaseURL, "")
 	for listen, ok := range map[string]bool{":8080": true, "127.0.0.1:9000": true, "[::]:80": true, "9000": false, "localhost": false, "localhost:": false} {
