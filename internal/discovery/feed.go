@@ -141,7 +141,7 @@ func parseFeed(body []byte, base *url.URL) ([]Candidate, error) {
 			entryBase := withBase(feedBase, e.Base)
 			linkBase := entryBase
 			for _, l := range e.Links {
-				if l.Rel == "" || l.Rel == "alternate" {
+				if (l.Rel == "" || l.Rel == "alternate") && strings.TrimSpace(l.Href) != "" {
 					link, linkBase = l.Href, withBase(entryBase, l.Base)
 					break
 				}

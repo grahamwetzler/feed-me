@@ -215,6 +215,7 @@ func TestParseFeedEdgeCases(t *testing.T) {
 	atomDoc := `<feed xmlns="http://www.w3.org/2005/Atom" xml:base="https://example.com/posts/">
   <entry><title>No link</title></entry>
   <entry><title>Only related</title><link rel="related" href="x"/></entry>
+  <entry><title>Blank first</title><link href=" "/><link rel="alternate" href="zero"/></entry>
   <entry><title type="html">&lt;b&gt;Bold&lt;/b&gt; &amp;amp; more</title><link href="one"/>
     <summary type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">Nested <em>text</em> here</div></summary></entry>
   <entry xml:base="2026/"><title>Entry base</title><link href="two"/></entry>
@@ -228,12 +229,12 @@ func TestParseFeedEdgeCases(t *testing.T) {
 	for _, c := range cands {
 		urls = append(urls, c.URL)
 	}
-	want := "https://example.com/posts/one https://example.com/posts/2026/two https://example.com/other/three"
+	want := "https://example.com/posts/zero https://example.com/posts/one https://example.com/posts/2026/two https://example.com/other/three"
 	if got := strings.Join(urls, " "); got != want {
 		t.Errorf("atom urls = %s\nwant %s", got, want)
 	}
-	if len(cands) > 0 {
-		if h := cands[0].Hints; h["title"] != "Bold & more" || h["description"] != "Nested text here" {
+	if len(cands) > 1 {
+		if h := cands[1].Hints; h["title"] != "Bold & more" || h["description"] != "Nested text here" {
 			t.Errorf("atom text hints = %q", h)
 		}
 	}
