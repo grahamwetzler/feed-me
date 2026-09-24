@@ -577,36 +577,108 @@ func TestLostSourceDateIsKept(t *testing.T) {
 
 func discard() *slog.Logger { return slog.New(slog.DiscardHandler) }
 
-// stopAfterFirst closes stop once the first page fetch returns.
+// stopAfterFirst closes stop once the first post fetch returns; discovery
+// fetches (a sitemap, say) don't count. With cancel set it also cancels the
+// run's context, as a shutdown timeout would.
 type stopAfterFirst struct {
 	fetch.Fetcher
+	posts   map[string]string
 	stop    chan struct{}
-	fetches int
+	cancel  context.CancelFunc
+	fetches int // of posts
 }
 
 func (s *stopAfterFirst) Fetch(ctx context.Context, req fetch.Request) (*fetch.Response, error) {
 	resp, err := s.Fetcher.Fetch(ctx, req)
-	if s.fetches++; s.fetches == 1 {
-		close(s.stop)
+	if _, post := s.posts[req.URL]; post {
+		if s.fetches++; s.fetches == 1 {
+			close(s.stop)
+			if s.cancel != nil {
+				s.cancel()
+			}
+		}
 	}
 	return resp, err
 }
 
 func TestStopEndsRunAfterPageInFlight(t *testing.T) {
+	for _, cancelToo := range []bool{false, true} {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		now := time.Date(2026, 9, 10, 9, 30, 0, 0, la)
+		r := newRunner(t, &now)
+		_, site := loadSite(t, "claude-blog", claudeLinks)
+		posts := postFiles("claude-blog", "https://claude.com/blog/")
+		f, _ := fetcherFor(posts)
+		sf := &stopAfterFirst{Fetcher: f, posts: posts, stop: make(chan struct{})}
+		if cancelToo {
+			sf.cancel = cancel
+		}
+		r.Stop = sf.stop
+
+		st, err := r.Run(ctx, site, sf)
+		// A cancelled context also fails the store write, so only a plain stop keeps the page.
+		if !errors.Is(err, ErrStopped) || sf.fetches != 1 || (!cancelToo && st.New != 1) {
+			t.Errorf("cancel=%v: stopped run: %+v, %d fetches, err %v; want the one page in flight only", cancelToo, st, sf.fetches, err)
+		}
+		state, _ := r.Store.SiteState(context.Background(), site.ID)
+		if !state.LastRun.IsZero() {
+			t.Errorf("cancel=%v: a stopped run recorded state %+v; it should run again at the next start", cancelToo, state)
+		}
+	}
+}
+
+func TestStopBeforeRunFetchesNothing(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 10, 9, 30, 0, 0, la)
 	r := newRunner(t, &now)
-	_, site := loadSite(t, "claude-blog", claudeLinks)
-	f, _ := fetcherFor(postFiles("claude-blog", "https://claude.com/blog/"))
-	sf := &stopAfterFirst{Fetcher: f, stop: make(chan struct{})}
+	_, site := loadSite(t, "claude-blog", func(s string) string { return s }) // sitemap discovery
+	f, tr := fetcherFor(map[string]string{"https://claude.com/sitemap.xml": root + "/testdata/claude-blog/sitemap.xml"})
+	stop := make(chan struct{})
+	close(stop)
+	r.Stop = stop
+
+	if _, err := r.Run(ctx, site, f); !errors.Is(err, ErrStopped) {
+		t.Errorf("err %v, want ErrStopped", err)
+	}
+	if n := len(tr.Requests); n != 0 {
+		t.Errorf("made %d requests after Stop", n)
+	}
+	if state, _ := r.Store.SiteState(ctx, site.ID); !state.LastRun.IsZero() {
+		t.Errorf("recorded state %+v", state)
+	}
+}
+
+// stopOnFetch closes stop as a fetch starts, waits for the stop to reach
+// the fetch's context, then makes it.
+type stopOnFetch struct {
+	fetch.Fetcher
+	stop chan struct{}
+}
+
+func (s *stopOnFetch) Fetch(ctx context.Context, req fetch.Request) (*fetch.Response, error) {
+	close(s.stop)
+	select {
+	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
+	}
+	return s.Fetcher.Fetch(ctx, req)
+}
+
+func TestStopAbandonsDiscovery(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 10, 9, 30, 0, 0, la)
+	r := newRunner(t, &now)
+	_, site := loadSite(t, "claude-blog", func(s string) string { return s }) // sitemap discovery
+	f, _ := fetcherFor(map[string]string{"https://claude.com/sitemap.xml": root + "/testdata/claude-blog/sitemap.xml"})
+	sf := &stopOnFetch{Fetcher: f, stop: make(chan struct{})}
 	r.Stop = sf.stop
 
-	st, err := r.Run(ctx, site, sf)
-	if !errors.Is(err, ErrStopped) || st.New != 1 || sf.fetches != 1 {
-		t.Errorf("stopped run: %+v, %d fetches, err %v; want the one page in flight stored", st, sf.fetches, err)
+	st, err := r.Run(ctx, site, sf) // a second fetch would close stop twice and panic
+	if !errors.Is(err, ErrStopped) || st.Discovered != 0 {
+		t.Errorf("err %v, stats %+v; want the sitemap fetch abandoned", err, st)
 	}
-	state, _ := r.Store.SiteState(ctx, site.ID)
-	if !state.LastRun.IsZero() {
-		t.Errorf("a stopped run recorded state %+v; it should run again at the next start", state)
+	if state, _ := r.Store.SiteState(ctx, site.ID); !state.LastRun.IsZero() {
+		t.Errorf("recorded state %+v", state)
 	}
 }

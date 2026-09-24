@@ -61,6 +61,16 @@ type Runner struct {
 	Stop <-chan struct{}
 }
 
+// stopped reports whether Stop has been closed.
+func (r *Runner) stopped() bool {
+	select {
+	case <-r.Stop:
+		return true
+	default:
+		return false
+	}
+}
+
 // ErrStopped is returned by a run ended early through Runner.Stop.
 var ErrStopped = errors.New("run stopped")
 
@@ -89,15 +99,33 @@ func (r *Runner) Run(ctx context.Context, site *config.Site, f fetch.Fetcher) (S
 	}
 	state.LastRun = start
 	fail := func(err error) (Stats, error) {
+		st.Duration = r.now().Sub(start)
+		if r.stopped() {
+			// Whatever the error, a stopped run records nothing (see Stop).
+			return st, ErrStopped
+		}
 		state.LastError = err.Error()
 		if perr := r.Store.PutSiteState(ctx, site.ID, state); perr != nil {
 			err = errors.Join(err, perr)
 		}
-		st.Duration = r.now().Sub(start)
 		return st, err
 	}
+	if r.stopped() {
+		return fail(ErrStopped)
+	}
 
-	cands, err := discovery.Discover(ctx, f, site)
+	// Discovery pages aren't stored, so a stop abandons the one in flight.
+	dctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		select {
+		case <-r.Stop:
+			cancel()
+		case <-dctx.Done():
+		}
+	}()
+	cands, err := discovery.Discover(dctx, f, site)
+	cancel()
 	if err != nil {
 		return fail(err)
 	}
@@ -114,14 +142,11 @@ func (r *Runner) Run(ctx context.Context, site *config.Site, f fetch.Fetcher) (S
 	log.Debug("planned run", "discovered", len(cands), "known", len(known), "fetching", len(targets))
 
 	for _, t := range targets {
+		if r.stopped() {
+			return fail(ErrStopped)
+		}
 		if err := ctx.Err(); err != nil {
 			return fail(err)
-		}
-		select {
-		case <-r.Stop:
-			st.Duration = r.now().Sub(start)
-			return st, ErrStopped
-		default:
 		}
 		if err := r.process(ctx, site, f, t, start, &st, log); err != nil {
 			st.Errors++
