@@ -332,3 +332,23 @@ func TestBasePathMustBeLiteral(t *testing.T) {
 		}
 	}
 }
+
+// The container's config must load from where the image and compose put it,
+// with ../sites resolving to the shipped sites.
+func TestLoadDeployConfig(t *testing.T) {
+	t.Setenv(EnvPublicBaseURL, "")
+	cfg, err := Load("../../deploy/rss-er.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.Abs("../../sites")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := filepath.Abs(cfg.Global.SitesDir); got != want {
+		t.Errorf("sites_dir = %s, want %s", cfg.Global.SitesDir, want)
+	}
+	if len(cfg.Sites) == 0 || cfg.Global.StorePath != "/data/rss-er.db" {
+		t.Errorf("%d sites, store_path %s", len(cfg.Sites), cfg.Global.StorePath)
+	}
+}
