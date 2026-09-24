@@ -24,7 +24,26 @@ type xmlLink struct {
 	XMLName xml.Name
 	Href    string `xml:"href,attr"`
 	Rel     string `xml:"rel,attr"`
+	Base    string `xml:"http://www.w3.org/XML/1998/namespace base,attr"`
 	Text    string `xml:",chardata"`
+}
+
+// atomText is an Atom text construct (RFC 4287 §3.1), whose type says how to
+// read it: plain text, escaped HTML, or inline XHTML.
+type atomText struct {
+	Type  string `xml:"type,attr"`
+	Text  string `xml:",chardata"`
+	Inner string `xml:",innerxml"`
+}
+
+func (t atomText) String() string {
+	switch t.Type {
+	case "html":
+		return normalize.PlainText(t.Text)
+	case "xhtml":
+		return normalize.PlainText(t.Inner)
+	}
+	return t.Text
 }
 
 type rssItem struct {
@@ -44,9 +63,10 @@ type rssItem struct {
 }
 
 type atomEntry struct {
-	Title     string    `xml:"title"`
+	Base      string    `xml:"http://www.w3.org/XML/1998/namespace base,attr"`
+	Title     atomText  `xml:"title"`
 	Links     []xmlLink `xml:"link"`
-	Summary   string    `xml:"summary"`
+	Summary   atomText  `xml:"summary"`
 	Published string    `xml:"published"`
 	Updated   string    `xml:"updated"`
 	Authors   []struct {
@@ -59,6 +79,7 @@ type atomEntry struct {
 
 type feedDoc struct {
 	XMLName xml.Name
+	Base    string `xml:"http://www.w3.org/XML/1998/namespace base,attr"` // Atom xml:base
 	Channel struct {
 		Items []rssItem `xml:"item"`
 	} `xml:"channel"`
@@ -101,6 +122,9 @@ func parseFeed(body []byte, base *url.URL) ([]Candidate, error) {
 			if link == "" && it.GUID.IsPermaLink != "false" {
 				link = it.GUID.Value
 			}
+			if strings.TrimSpace(link) == "" {
+				continue // resolving "" would yield the feed's own URL
+			}
 			h := hints{}
 			h.set("title", it.Title)
 			h.set("description", it.Description)
@@ -111,17 +135,23 @@ func parseFeed(body []byte, base *url.URL) ([]Candidate, error) {
 			out = append(out, Candidate{URL: resolve(base, link), Hints: h})
 		}
 	case "feed":
+		feedBase := withBase(base, doc.Base)
 		for _, e := range doc.Entries {
 			link := ""
+			entryBase := withBase(feedBase, e.Base)
+			linkBase := entryBase
 			for _, l := range e.Links {
 				if l.Rel == "" || l.Rel == "alternate" {
-					link = l.Href
+					link, linkBase = l.Href, withBase(entryBase, l.Base)
 					break
 				}
 			}
+			if strings.TrimSpace(link) == "" {
+				continue
+			}
 			h := hints{}
-			h.set("title", e.Title)
-			h.set("description", e.Summary)
+			h.set("title", e.Title.String())
+			h.set("description", e.Summary.String())
 			h.set("published", first(e.Published, e.Updated))
 			h.set("updated", e.Updated)
 			if len(e.Authors) > 0 {
@@ -132,12 +162,24 @@ func parseFeed(body []byte, base *url.URL) ([]Candidate, error) {
 				cats = append(cats, c.Term)
 			}
 			h.set("category", strings.Join(cats, "\n"))
-			out = append(out, Candidate{URL: resolve(base, link), Hints: h})
+			out = append(out, Candidate{URL: resolve(linkBase, link), Hints: h})
 		}
 	default:
 		return nil, fmt.Errorf("root element is <%s>, want <rss>, <rdf:RDF> or <feed>", doc.XMLName.Local)
 	}
 	return out, nil
+}
+
+// withBase applies an xml:base attribute, itself relative to the enclosing base.
+func withBase(base *url.URL, xmlBase string) *url.URL {
+	if strings.TrimSpace(xmlBase) == "" {
+		return base
+	}
+	b, err := url.Parse(strings.TrimSpace(xmlBase))
+	if err != nil {
+		return base
+	}
+	return base.ResolveReference(b)
 }
 
 type hints map[string]string

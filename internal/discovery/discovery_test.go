@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,5 +207,47 @@ func writeFile(t *testing.T, path, body string) {
 	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestParseFeedEdgeCases(t *testing.T) {
+	base, _ := url.Parse("https://example.com/feeds/atom.xml")
+	atomDoc := `<feed xmlns="http://www.w3.org/2005/Atom" xml:base="https://example.com/posts/">
+  <entry><title>No link</title></entry>
+  <entry><title>Only related</title><link rel="related" href="x"/></entry>
+  <entry><title type="html">&lt;b&gt;Bold&lt;/b&gt; &amp;amp; more</title><link href="one"/>
+    <summary type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml">Nested <em>text</em> here</div></summary></entry>
+  <entry xml:base="2026/"><title>Entry base</title><link href="two"/></entry>
+  <entry xml:base="2026/"><title>Link base</title><link xml:base="/other/" href="three"/></entry>
+</feed>`
+	cands, err := parseFeed([]byte(atomDoc), base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var urls []string
+	for _, c := range cands {
+		urls = append(urls, c.URL)
+	}
+	want := "https://example.com/posts/one https://example.com/posts/2026/two https://example.com/other/three"
+	if got := strings.Join(urls, " "); got != want {
+		t.Errorf("atom urls = %s\nwant %s", got, want)
+	}
+	if len(cands) > 0 {
+		if h := cands[0].Hints; h["title"] != "Bold & more" || h["description"] != "Nested text here" {
+			t.Errorf("atom text hints = %q", h)
+		}
+	}
+
+	rss := `<rss version="2.0"><channel>
+  <item><title>No link</title><guid isPermaLink="false">abc</guid></item>
+  <item><title>Blank</title><link> </link></item>
+  <item><title>Good</title><link>https://example.com/posts/good</link></item>
+</channel></rss>`
+	cands, err = parseFeed([]byte(rss), base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cands) != 1 || cands[0].URL != "https://example.com/posts/good" {
+		t.Errorf("rss candidates = %+v", cands)
 	}
 }
