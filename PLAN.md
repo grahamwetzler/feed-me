@@ -405,6 +405,7 @@ The service runs as a long-lived `feed-me run` container behind the user's exist
 **`compose.yaml`** (shipped in the repo). The container config is `deploy/feed-me.yaml`, which puts the store on `/data` and logs JSON. `deploy/` and `sites/` are mounted over the baked-in copies. Shutdown can take up to 40s (30s for the page in flight, 10s for HTTP), so the stop grace period is raised from Docker's default of 10s; with plain `docker run`, pass `--stop-timeout 45`.
 
 ```yaml
+name: feed-me # not the checkout directory's name
 services:
   feed-me:
     image: feed-me:latest

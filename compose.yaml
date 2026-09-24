@@ -1,3 +1,4 @@
+name: feed-me # not the checkout directory's name
 services:
   feed-me:
     image: feed-me:latest
@@ -18,5 +19,7 @@ services:
       - ./deploy:/config:ro
       - ./sites:/sites:ro
     expose: ["8080"] # the reverse proxy joins this network; no host port needed
+    # Per-host settings (the real public URL, a host port) go in an untracked
+    # compose.override.yaml, which docker compose merges in automatically.
 volumes:
   feed-me-data:

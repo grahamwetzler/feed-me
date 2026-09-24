@@ -6,3 +6,5 @@ out/
 # roborev snapshots
 /.roborev/
 /feed-me
+# Per-host compose settings
+/compose.override.yaml
