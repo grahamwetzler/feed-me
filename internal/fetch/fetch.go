@@ -75,7 +75,7 @@ type Client struct {
 	mu       sync.Mutex
 	limiters map[string]*rate.Limiter
 	robots   *robotsCache
-	withheld map[string]bool // hosts already warned about in withholdHeaders
+	withheld map[string]bool // site and host pairs already warned about in withholdHeaders
 }
 
 // UserAgent builds the honest default User-Agent (§3.1).
@@ -136,15 +136,27 @@ func (o Options) headersFor(u *url.URL) map[string]string {
 	return nil
 }
 
-// withholdHeaders logs, once per host, that a site's headers were not sent
-// there, so a host the site really uses (www., say) is easy to add.
+// OwnsHeader reports whether the fetcher sets header name itself, so a
+// site's configured value for it is ignored.
+func OwnsHeader(name string) bool {
+	switch http.CanonicalHeaderKey(name) {
+	case "User-Agent", "If-None-Match", "If-Modified-Since":
+		return true
+	}
+	return false
+}
+
+// withholdHeaders logs, once per site and host, that a site's headers were
+// not sent there, so a host the site really uses (www., say) is easy to add.
+// The Client is shared, so each site gets its own warning.
 func (c *Client) withholdHeaders(o Options, host string) {
 	if len(o.Headers) == 0 {
 		return
 	}
+	key := host + "\x00" + strings.Join(o.HeaderHosts, ",")
 	c.mu.Lock()
-	seen := c.withheld[host]
-	c.withheld[host] = true
+	seen := c.withheld[key]
+	c.withheld[key] = true
 	c.mu.Unlock()
 	if !seen {
 		c.Log.Warn("not sending the site's fetch.headers to this host; add it to fetch.header_hosts if it should get them",
@@ -262,7 +274,9 @@ func (c *Client) once(ctx context.Context, req Request, o Options) (*Response, t
 		c.withholdHeaders(o, hr.URL.Host)
 	}
 	for k, v := range h {
-		hr.Header.Set(k, v)
+		if !OwnsHeader(k) {
+			hr.Header.Set(k, v)
+		}
 	}
 	hr.Header.Set("User-Agent", c.UserAgent)
 	if req.ETag != "" {
@@ -345,12 +359,11 @@ func (c *Client) client(o Options) *http.Client {
 		// net/http copies the first request's headers onto each hop and drops
 		// only Authorization, Cookie and the like when the domain changes.
 		// Configured headers follow the same host rule as a fresh request.
-		// One that once replaced (User-Agent, the validators) is the
-		// fetcher's own and stays.
+		// The fetcher's own (OwnsHeader) never came from them and stay.
 		if o.headersFor(r.URL) == nil {
 			c.withholdHeaders(o, r.URL.Host)
-			for k, v := range o.Headers {
-				if r.Header.Get(k) == v {
+			for k := range o.Headers {
+				if !OwnsHeader(k) {
 					r.Header.Del(k)
 				}
 			}

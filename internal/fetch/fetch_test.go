@@ -329,14 +329,21 @@ func TestRedirectToAnotherHostKeepsFetcherHeaders(t *testing.T) {
 	c.Log = slog.New(slog.NewTextHandler(&logs, nil))
 	o := fast
 	o.RespectRobots = false
-	// User-Agent and If-None-Match are the fetcher's own; configuring them
-	// doesn't make them the site's to strip.
-	o.Headers = map[string]string{"User-Agent": "spoofed", "If-None-Match": "cfg", "X-Extra": "yes"}
+	// User-Agent and If-None-Match are the fetcher's own; configuring them,
+	// even to the very values the fetcher sends, doesn't make them the
+	// site's to strip.
+	o.Headers = map[string]string{"User-Agent": "ua", "If-None-Match": "cfg", "X-Extra": "yes"}
 	o.HeaderHosts = []string{"src.test"}
 	for range 2 {
 		if _, err := c.Site(o).Fetch(context.Background(), Request{URL: "http://src.test/r", ETag: `"v1"`}); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// Another site sharing the Client is warned about the same host too.
+	other := o
+	other.HeaderHosts = []string{"src.test", "cdn.test"}
+	if _, err := c.Site(other).Fetch(context.Background(), Request{URL: "http://src.test/r", ETag: `"v1"`}); err != nil {
+		t.Fatal(err)
 	}
 	mu.Lock()
 	defer mu.Unlock()
@@ -348,8 +355,8 @@ func TestRedirectToAnotherHostKeepsFetcherHeaders(t *testing.T) {
 			t.Errorf("%s: X-Extra = %q, want %q", r.host, r.extra, want)
 		}
 	}
-	if n := strings.Count(logs.String(), "host=dst.test"); n != 1 {
-		t.Errorf("withheld-headers warning logged %d times for dst.test, want once:\n%s", n, logs.String())
+	if n := strings.Count(logs.String(), "host=dst.test"); n != 2 {
+		t.Errorf("withheld-headers warning logged %d times for dst.test, want once per site:\n%s", n, logs.String())
 	}
 }
 

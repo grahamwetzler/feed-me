@@ -17,6 +17,8 @@ import (
 
 	"golang.org/x/net/http/httpguts"
 	"gopkg.in/yaml.v3"
+
+	"feed-me/internal/fetch"
 )
 
 // Config is the fully loaded and validated configuration.
@@ -423,6 +425,8 @@ func LoadSite(path string, g *Global) (*Site, Errors) {
 	for k, val := range s.Fetch.Headers {
 		if !httpguts.ValidHeaderFieldName(k) {
 			v.err(p("fetch", "headers"), "invalid header name %q", k)
+		} else if fetch.OwnsHeader(k) {
+			v.err(p("fetch", "headers", k), "is set by feed-me itself (use user_agent in feed-me.yaml for the User-Agent)")
 		} else if !httpguts.ValidHeaderFieldValue(val) {
 			v.err(p("fetch", "headers", k), "invalid header value %q (no control characters or newlines)", val)
 		}

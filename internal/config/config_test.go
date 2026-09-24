@@ -287,6 +287,7 @@ fetch:
     X@Test: a
     X-Block: |
       value
+    user-agent: mine
 discovery: [{type: links, urls: [https://example.com/a]}]
 item: {title: [css:h1], content: {selector: article}}
 `)
@@ -294,7 +295,8 @@ item: {title: [css:h1], content: {selector: article}}
 	must(t, err)
 	_, errs := LoadSite(sp, gl)
 	msgs := errs.Error()
-	if len(errs) != 2 || !strings.Contains(msgs, `invalid header name "X@Test"`) || !strings.Contains(msgs, "invalid header value") {
+	if len(errs) != 3 || !strings.Contains(msgs, `invalid header name "X@Test"`) || !strings.Contains(msgs, "invalid header value") ||
+		!strings.Contains(msgs, "set by feed-me itself") {
 		t.Fatalf("got %v", errs)
 	}
 }
