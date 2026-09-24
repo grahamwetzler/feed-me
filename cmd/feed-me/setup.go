@@ -48,6 +48,7 @@ func siteFetcher(c *fetch.Client, s *config.Site) fetch.Fetcher {
 		r = rateOverride
 	}
 	return c.Site(fetch.Options{
+		Site:          s.ID,
 		Rate:          r,
 		Timeout:       s.Fetch.Timeout.D,
 		Headers:       s.Fetch.Headers,

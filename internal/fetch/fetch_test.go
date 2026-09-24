@@ -333,15 +333,16 @@ func TestRedirectToAnotherHostKeepsFetcherHeaders(t *testing.T) {
 	// even to the very values the fetcher sends, doesn't make them the
 	// site's to strip.
 	o.Headers = map[string]string{"User-Agent": "ua", "If-None-Match": "cfg", "X-Extra": "yes"}
-	o.HeaderHosts = []string{"src.test"}
+	o.Site, o.HeaderHosts = "one", []string{"src.test"}
 	for range 2 {
 		if _, err := c.Site(o).Fetch(context.Background(), Request{URL: "http://src.test/r", ETag: `"v1"`}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Another site sharing the Client is warned about the same host too.
+	// Another site sharing the Client, even with the same hosts, is warned
+	// about the same host too.
 	other := o
-	other.HeaderHosts = []string{"src.test", "cdn.test"}
+	other.Site = "two"
 	if _, err := c.Site(other).Fetch(context.Background(), Request{URL: "http://src.test/r", ETag: `"v1"`}); err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +356,8 @@ func TestRedirectToAnotherHostKeepsFetcherHeaders(t *testing.T) {
 			t.Errorf("%s: X-Extra = %q, want %q", r.host, r.extra, want)
 		}
 	}
-	if n := strings.Count(logs.String(), "host=dst.test"); n != 2 {
+	if n := strings.Count(logs.String(), "host=dst.test"); n != 2 ||
+		!strings.Contains(logs.String(), "site=one") || !strings.Contains(logs.String(), "site=two") {
 		t.Errorf("withheld-headers warning logged %d times for dst.test, want once per site:\n%s", n, logs.String())
 	}
 }

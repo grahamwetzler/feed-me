@@ -117,6 +117,7 @@ func defaultBackoff(n int) time.Duration {
 
 // Options are one site's fetch settings.
 type Options struct {
+	Site          string  // the site's id, for logs
 	Rate          float64 // requests per second, per host
 	Timeout       time.Duration
 	Headers       map[string]string
@@ -153,14 +154,14 @@ func (c *Client) withholdHeaders(o Options, host string) {
 	if len(o.Headers) == 0 {
 		return
 	}
-	key := host + "\x00" + strings.Join(o.HeaderHosts, ",")
+	key := o.Site + "\x00" + host
 	c.mu.Lock()
 	seen := c.withheld[key]
 	c.withheld[key] = true
 	c.mu.Unlock()
 	if !seen {
 		c.Log.Warn("not sending the site's fetch.headers to this host; add it to fetch.header_hosts if it should get them",
-			"host", host, "header_hosts", o.HeaderHosts)
+			"site", o.Site, "host", host, "header_hosts", o.HeaderHosts)
 	}
 }
 
