@@ -1,0 +1,214 @@
+package fetch
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func newTestClient(srv *httptest.Server) *Client {
+	c := NewClient(srv.Client(), "rss-er/test (+https://example.com)", 1<<10, nil)
+	c.backoff = func(int) time.Duration { return time.Millisecond }
+	return c
+}
+
+var fast = Options{Rate: 1000, Timeout: 5 * time.Second, RespectRobots: true}
+
+func TestFetchSetsUserAgentAndHeaders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/robots.txt" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("ETag", `"v1"`)
+		_, _ = w.Write([]byte(r.UserAgent() + "|" + r.Header.Get("X-Extra")))
+	}))
+	defer srv.Close()
+
+	o := fast
+	o.Headers = map[string]string{"X-Extra": "yes", "User-Agent": "spoofed"}
+	resp, err := newTestClient(srv).Site(o).Fetch(context.Background(), Request{URL: srv.URL + "/a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(resp.Body); got != "rss-er/test (+https://example.com)|yes" {
+		t.Errorf("body = %q", got)
+	}
+	if resp.ETag != `"v1"` {
+		t.Errorf("etag = %q", resp.ETag)
+	}
+}
+
+func TestConditionalGet(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("If-None-Match") == `"v1"` && r.Header.Get("If-Modified-Since") == "Mon, 21 Sep 2026 15:12:00 GMT" {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = w.Write([]byte("full"))
+	}))
+	defer srv.Close()
+
+	o := fast
+	o.RespectRobots = false
+	resp, err := newTestClient(srv).Site(o).Fetch(context.Background(), Request{
+		URL: srv.URL + "/a", ETag: `"v1"`, LastModified: "Mon, 21 Sep 2026 15:12:00 GMT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.NotModified || resp.Body != nil || resp.ETag != `"v1"` {
+		t.Errorf("got %+v", resp)
+	}
+}
+
+func TestRetriesHonorRetryAfter(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) < 3 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	o := fast
+	o.RespectRobots = false
+	resp, err := newTestClient(srv).Site(o).Fetch(context.Background(), Request{URL: srv.URL})
+	if err != nil || string(resp.Body) != "ok" || calls.Load() != 3 {
+		t.Fatalf("resp=%v err=%v calls=%d", resp, err, calls.Load())
+	}
+}
+
+func TestNoRetryOn404AndGiveUpAfterMaxAttempts(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.URL.Path == "/missing" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+
+	o := fast
+	o.RespectRobots = false
+	f := newTestClient(srv).Site(o)
+
+	_, err := f.Fetch(context.Background(), Request{URL: srv.URL + "/missing"})
+	var se *StatusError
+	if !errors.As(err, &se) || se.Status != 404 || calls.Load() != 1 {
+		t.Errorf("404: err=%v calls=%d", err, calls.Load())
+	}
+
+	calls.Store(0)
+	_, err = f.Fetch(context.Background(), Request{URL: srv.URL + "/flaky"})
+	if !errors.As(err, &se) || se.Status != 502 || calls.Load() != 3 {
+		t.Errorf("502: err=%v calls=%d", err, calls.Load())
+	}
+}
+
+func TestBodySizeCap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", 2<<10)))
+	}))
+	defer srv.Close()
+	o := fast
+	o.RespectRobots = false
+	_, err := newTestClient(srv).Site(o).Fetch(context.Background(), Request{URL: srv.URL})
+	if err == nil || !strings.Contains(err.Error(), "exceeds 1024 bytes") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestRobots(t *testing.T) {
+	var robotsCalls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/robots.txt" {
+			robotsCalls.Add(1)
+			_, _ = w.Write([]byte("User-agent: *\nDisallow: /*.json$\n\nUser-agent: rss-er\nDisallow: /private/\n"))
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	f := newTestClient(srv).Site(fast)
+	ctx := context.Background()
+	if _, err := f.Fetch(ctx, Request{URL: srv.URL + "/posts/a"}); err != nil {
+		t.Errorf("allowed path: %v", err)
+	}
+	if _, err := f.Fetch(ctx, Request{URL: srv.URL + "/private/x"}); !errors.Is(err, ErrDisallowed) {
+		t.Errorf("rss-er group should disallow /private/: %v", err)
+	}
+	// Our own group applies, not *, so *.json is allowed for rss-er.
+	if _, err := f.Fetch(ctx, Request{URL: srv.URL + "/data.json"}); err != nil {
+		t.Errorf("/data.json: %v", err)
+	}
+	if n := robotsCalls.Load(); n != 1 {
+		t.Errorf("robots.txt fetched %d times, want 1 (cached)", n)
+	}
+
+	o := fast
+	o.RespectRobots = false
+	if _, err := newTestClient(srv).Site(o).Fetch(ctx, Request{URL: srv.URL + "/private/x"}); err != nil {
+		t.Errorf("respect_robots: false should skip the check: %v", err)
+	}
+}
+
+func TestRobots5xxDisallows(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/robots.txt" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	if _, err := newTestClient(srv).Site(fast).Fetch(context.Background(), Request{URL: srv.URL + "/a"}); !errors.Is(err, ErrDisallowed) {
+		t.Errorf("err = %v, want ErrDisallowed", err)
+	}
+}
+
+func TestRateLimitIsPerHostAndSlowestWins(t *testing.T) {
+	c := NewClient(nil, "ua", 0, nil)
+	l := c.limiter("a.example", 10)
+	c.limiter("a.example", 2)
+	c.limiter("a.example", 5)
+	if l.Limit() != 2 {
+		t.Errorf("limit = %v, want 2", l.Limit())
+	}
+	if c.limiter("b.example", 1) == l {
+		t.Error("hosts share a limiter")
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	if d := parseRetryAfter("120"); d != 2*time.Minute {
+		t.Errorf("seconds: %v", d)
+	}
+	future := time.Now().Add(time.Hour).UTC().Format(http.TimeFormat)
+	if d := parseRetryAfter(future); d < 59*time.Minute {
+		t.Errorf("date: %v", d)
+	}
+	if d := parseRetryAfter("soon"); d != 0 {
+		t.Errorf("junk: %v", d)
+	}
+}
+
+func TestUserAgent(t *testing.T) {
+	if got := UserAgent("1.2.3", "https://example.com/bot"); got != "rss-er/1.2.3 (+https://example.com/bot)" {
+		t.Error(got)
+	}
+	if got := UserAgent("dev", ""); got != "rss-er/dev" {
+		t.Error(got)
+	}
+}
