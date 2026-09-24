@@ -106,7 +106,7 @@ func resolveDate(p *Page, f *config.DateField, loc *time.Location, warnings *[]s
 	}
 	for i := range f.Sources {
 		src := &f.Sources[i]
-		for _, v := range p.values(src) {
+		for _, v := range p.allValues(src) {
 			if v = normalize.CleanText(v); v == "" {
 				continue
 			}
@@ -122,30 +122,30 @@ func resolveDate(p *Page, f *config.DateField, loc *time.Location, warnings *[]s
 }
 
 // content returns the inner HTML of every selector match in document order,
-// after removing excluded nodes. A match nested inside an earlier match is
+// after removing excluded nodes. A match nested inside another match is
 // skipped, since its HTML is already included.
 func content(doc *goquery.Document, c *config.Content) (string, int) {
-	matches := doc.FindMatcher(c.Selector.Matcher)
-	var parts []string
-	var kept []*html.Node
-	matches.Each(func(_ int, s *goquery.Selection) {
-		n := s.Get(0)
-		for _, k := range kept {
-			if contains(k, n) {
-				return
-			}
+	// Pick the outermost matches before exclusions detach anything: a removed
+	// subtree that also matches would otherwise look like a separate match.
+	var outer []*html.Node
+	for _, n := range doc.FindMatcher(c.Selector.Matcher).Nodes {
+		if len(outer) == 0 || !contains(outer[len(outer)-1], n) {
+			outer = append(outer, n)
 		}
+	}
+	var parts []string
+	for _, n := range outer {
+		s := goquery.NewDocumentFromNode(n).Selection
 		for _, ex := range c.Exclude {
 			s.FindMatcher(ex.Matcher).Remove()
 		}
 		h, err := s.Html()
 		empty := strings.TrimSpace(s.Text()) == "" && s.Find("img, video, iframe").Length() == 0
 		if err != nil || empty {
-			return
+			continue
 		}
-		kept = append(kept, n)
 		parts = append(parts, strings.TrimSpace(h))
-	})
+	}
 	return strings.Join(parts, "\n"), len(parts)
 }
 

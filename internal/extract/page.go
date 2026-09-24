@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"maps"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -89,11 +91,11 @@ func (p *Page) loadJSONLD() {
 				}
 			case map[string]any:
 				p.jsonld = append(p.jsonld, t)
-				for _, x := range t {
-					if _, ok := x.(map[string]any); ok {
-						walk(x)
-					} else if _, ok := x.([]any); ok {
-						walk(x)
+				// Sorted, not map order, so the same page always resolves the same way.
+				for _, k := range slices.Sorted(maps.Keys(t)) {
+					switch t[k].(type) {
+					case map[string]any, []any:
+						walk(t[k])
 					}
 				}
 			}
@@ -104,20 +106,32 @@ func (p *Page) loadJSONLD() {
 
 // values evaluates one source. Multi-valued fields use every result; scalar
 // fields use the first. URL-typed results are made absolute.
-func (p *Page) values(src *config.Source) []string {
+func (p *Page) values(src *config.Source) []string { return p.eval(src, false) }
+
+// allValues is values, except that jsonld yields the values of every matching
+// object rather than the first, so a field that validates its values (dates)
+// can fall through an unusable one.
+func (p *Page) allValues(src *config.Source) []string { return p.eval(src, true) }
+
+func (p *Page) eval(src *config.Source, allJSONLD bool) []string {
 	switch src.Kind {
 	case config.SourceMeta:
 		if v := p.meta[strings.ToLower(src.Expr)]; v != "" {
 			return []string{v}
 		}
 	case config.SourceJSONLD:
+		var out []string
 		for _, obj := range p.jsonld {
 			if hasType(obj, src.JSONLDType) {
 				if vs := jsonldPath(obj, src.JSONLDPath); len(vs) > 0 {
-					return vs
+					if !allJSONLD {
+						return vs
+					}
+					out = append(out, vs...)
 				}
 			}
 		}
+		return out
 	case config.SourceCSS, config.SourceTime:
 		var out []string
 		p.Doc.FindMatcher(src.Matcher).Each(func(_ int, s *goquery.Selection) {
