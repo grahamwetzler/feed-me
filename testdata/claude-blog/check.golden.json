@@ -1,0 +1,184 @@
+[
+  {
+    "url": "https://claude.com/blog/t-rowe-price-brings-more-of-claude-to-its-investment-process",
+    "canonical": "https://claude.com/blog/t-rowe-price-brings-more-of-claude-to-its-investment-process",
+    "title": "T. Rowe Price brings more of Claude to its investment process",
+    "summary": "How T. Rowe Price is using Claude across the business, from driving fundamental research to building investment tools.",
+    "image": "https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/6aa2e89602db05b69385350a_og_t-rowe-price-brings-more-of-claude-to-its-investment-process.jpg",
+    "published": "2026-09-10T00:00:00-07:00",
+    "published_date_only": true,
+    "updated": "2026-09-10T00:00:00-07:00",
+    "content_blocks": 1,
+    "content_chars": 2544,
+    "content_elements": {
+      "h2": 2,
+      "p": 8,
+      "ul": 1
+    },
+    "content_start": "T. Rowe Price, a global investment management firm, and Anthropic today announc…",
+    "content_sha256": "8adefd3bdc6c9cab",
+    "sources": {
+      "canonical": "meta:og:url",
+      "content": ".blog_post_content_wrap \u003e .u-rich-text-blog.w-richtext:not(.w-condition-invisible)",
+      "image": "jsonld:BlogPosting.image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  },
+  {
+    "url": "https://claude.com/blog/how-anthropics-business-development-team-uses-claude-to-run-inbound-and-outbound-at-scale",
+    "canonical": "https://claude.com/blog/how-anthropics-business-development-team-uses-claude-to-run-inbound-and-outbound-at-scale",
+    "title": "How Anthropic's business development team uses Claude to run inbound and outbound at scale",
+    "summary": "A business development rep shares how his team uses Claude to research account books, draft customer replies, and handle ad-hoc data analysis requests.",
+    "image": "https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/6a7a5d2394984ce6aa0e8313_og_how-anthropics-business-development-team-uses-claude-to-run-inbound-and-outbound-at-scale%20(1).jpg",
+    "published": "2026-08-07T00:00:00-07:00",
+    "published_date_only": true,
+    "updated": "2026-09-16T00:00:00-07:00",
+    "content_blocks": 1,
+    "content_chars": 9355,
+    "content_elements": {
+      "figure": 7,
+      "h2": 4,
+      "img": 7,
+      "p": 25,
+      "ul": 1
+    },
+    "content_start": "Early in my career in business development, account executives would hand me li…",
+    "content_sha256": "2888709e16825b0d",
+    "sources": {
+      "canonical": "meta:og:url",
+      "content": ".blog_post_content_wrap \u003e .u-rich-text-blog.w-richtext:not(.w-condition-invisible)",
+      "image": "jsonld:BlogPosting.image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  },
+  {
+    "url": "https://claude.com/blog/claude-and-slack",
+    "canonical": "https://claude.com/blog/claude-and-slack",
+    "title": "Claude and Slack",
+    "summary": "Access Claude directly into Slack so you can get help in channels and threads, or connect your Slack workspace to Claude for searching conversations and pulling context when you need it.",
+    "image": "https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/69050faaf1c82e21ceab419b_og_claude-and-slack.jpg",
+    "published": "2025-10-01T00:00:00-07:00",
+    "published_date_only": true,
+    "updated": "2026-06-21T00:00:00-07:00",
+    "content_blocks": 1,
+    "content_chars": 4227,
+    "content_elements": {
+      "figure": 2,
+      "h3": 4,
+      "iframe": 2,
+      "p": 14,
+      "ul": 2
+    },
+    "content_start": "Update: The Slack connector is now available for Claude Pro and Max subscribers…",
+    "content_sha256": "3c06419171ca68b7",
+    "sources": {
+      "canonical": "meta:og:url",
+      "content": ".blog_post_content_wrap \u003e .u-rich-text-blog.w-richtext:not(.w-condition-invisible)",
+      "image": "jsonld:BlogPosting.image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  },
+  {
+    "url": "https://claude.com/blog/introduction-to-agentic-coding",
+    "canonical": "https://claude.com/blog/introduction-to-agentic-coding",
+    "title": "Introduction to agentic coding",
+    "summary": "Move from fragmented AI code snippets to deploying integrated features with agentic coding that understands your entire codebase. AI-assisted coding has evolved rapidly over the last few years. Tools that once suggested the next line now predict entire functions by analyzing patterns in your code.",
+    "image": "https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/69050f2159f55e8c6f5f8e0f_og-claude-generic.jpg",
+    "published": "2025-10-30T00:00:00-07:00",
+    "published_date_only": true,
+    "updated": "2026-06-21T00:00:00-07:00",
+    "content_blocks": 1,
+    "content_chars": 10425,
+    "content_elements": {
+      "figure": 2,
+      "h2": 7,
+      "h3": 12,
+      "img": 2,
+      "p": 36,
+      "pre": 6,
+      "ul": 2
+    },
+    "content_start": "AI-assisted coding has evolved rapidly over the last few years. Tools that once…",
+    "content_sha256": "9ea2b374f826d28d",
+    "sources": {
+      "canonical": "meta:og:url",
+      "content": ".blog_post_content_wrap \u003e .u-rich-text-blog.w-richtext:not(.w-condition-invisible)",
+      "image": "jsonld:BlogPosting.image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  },
+  {
+    "url": "https://claude.com/blog/prompt-caching",
+    "canonical": "https://claude.com/blog/prompt-caching",
+    "title": "Prompt caching with Claude",
+    "summary": "Claude caches frequently used context between API calls, reducing costs and latency for long prompts. Update : Prompt caching is Generally Available on the Anthropic API. Prompt caching is also available in preview in Amazon Bedrock and on Google Cloud’s Vertex AI.",
+    "image": "https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/6905100bf54092f22300f436_og_prompt-caching.jpg",
+    "published": "2025-08-14T00:00:00-07:00",
+    "published_date_only": true,
+    "updated": "2026-06-21T00:00:00-07:00",
+    "content_blocks": 1,
+    "content_chars": 3901,
+    "content_elements": {
+      "figure": 2,
+      "h2": 1,
+      "h3": 3,
+      "p": 7,
+      "table": 2,
+      "ul": 13
+    },
+    "content_start": "Update: Prompt caching is Generally Available on the Anthropic API. Prompt cach…",
+    "content_sha256": "52f22426850cea1a",
+    "sources": {
+      "canonical": "meta:og:url",
+      "content": ".blog_post_content_wrap \u003e .u-rich-text-blog.w-richtext:not(.w-condition-invisible)",
+      "image": "jsonld:BlogPosting.image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  },
+  {
+    "url": "https://claude.com/blog/getting-started-with-loops",
+    "canonical": "https://claude.com/blog/getting-started-with-loops",
+    "title": "Loop engineering: Getting started with loops",
+    "summary": "Loop engineering with Anthropic's Claude Code: design turn-based, goal, time, and proactive agent loops that run to a stop condition.",
+    "published": "2026-06-30T00:00:00-07:00",
+    "published_date_only": true,
+    "updated": "2026-08-20T00:00:00-07:00",
+    "content_blocks": 2,
+    "content_chars": 9045,
+    "content_elements": {
+      "figure": 4,
+      "h2": 8,
+      "img": 3,
+      "ol": 1,
+      "p": 27,
+      "pre": 4,
+      "table": 1,
+      "ul": 7
+    },
+    "content_start": "Getting started with loopsThere’s a lot of talk right now about loop engineerin…",
+    "content_sha256": "3b16e58715485ea4",
+    "sources": {
+      "canonical": "meta:og:url",
+      "content": ".blog_post_content_wrap \u003e .u-rich-text-blog.w-richtext:not(.w-condition-invisible)",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "jsonld:BlogPosting.headline",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  }
+]

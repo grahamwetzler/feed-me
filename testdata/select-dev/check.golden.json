@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://select.dev/posts/databricks-liquid-clustering-simplified",
+    "canonical": "https://select.dev/posts/databricks-liquid-clustering-simplified",
+    "title": "Databricks Liquid Clustering Simplified",
+    "summary": "Databricks Liquid Clustering explained: how it beats ZORDER, picking the right clustering keys, migrating existing tables, and what OPTIMIZE really costs",
+    "author": "Niall Woodward",
+    "image": "https://cdn.sanity.io/images/wn0ylp2c/production/a67eed88b5ae35ff3db69650adf0407788a60a80-2400x1256.png?rect=4,0,2392,1256\u0026w=1200\u0026h=630",
+    "published": "2026-09-21T15:12:00Z",
+    "content_blocks": 1,
+    "content_chars": 14216,
+    "content_elements": {
+      "h2": 8,
+      "h3": 7,
+      "img": 2,
+      "p": 38,
+      "pre": 2,
+      "ul": 1
+    },
+    "content_start": "Enabling Databricks liquid clustering takes one line of SQL. Declare CLUSTER BY…",
+    "content_sha256": "a559cb5aac708438",
+    "sources": {
+      "author": "meta:article:author",
+      "canonical": "request",
+      "content": "div[class~=\"prose-p:!my-0\"]",
+      "image": "meta:og:image",
+      "published": "listing:published",
+      "summary": "meta:og:description",
+      "title": "meta:og:title"
+    }
+  },
+  {
+    "url": "https://select.dev/posts/what-is-databricks-genie-and-should-you-be-using-it-webinar-recap",
+    "canonical": "https://select.dev/posts/what-is-databricks-genie-and-should-you-be-using-it-webinar-recap",
+    "title": "What Is Databricks Genie, and Should You Be Using It? (Webinar Recap)",
+    "summary": "\"A recap of our Databricks Genie webinar: what Genie One, Agents, and Code actually do, what they cost, and how to keep that cost under control.",
+    "author": "Olivier Soucy",
+    "image": "https://cdn.sanity.io/images/wn0ylp2c/production/d670e87622722794dc3edd9ca415d2d0c22de16b-2400x1256.png?rect=4,0,2392,1256\u0026w=1200\u0026h=630",
+    "published": "2026-09-16T18:55:00Z",
+    "content_blocks": 1,
+    "content_chars": 10318,
+    "content_elements": {
+      "h2": 7,
+      "h3": 4,
+      "ol": 1,
+      "p": 28,
+      "ul": 2
+    },
+    "content_start": "In this session, Ian Whitestone (Co-founder \u0026 CEO, SELECT by DoiT) and Olivier …",
+    "content_sha256": "edb13bd83a37ec94",
+    "sources": {
+      "author": "meta:article:author",
+      "canonical": "request",
+      "content": "div[class~=\"prose-p:!my-0\"]",
+      "image": "meta:og:image",
+      "published": "listing:published",
+      "summary": "meta:og:description",
+      "title": "meta:og:title"
+    }
+  },
+  {
+    "url": "https://select.dev/posts/snowflake-dcm-projects-infrastructure-as-code-in-plain-sql",
+    "canonical": "https://select.dev/posts/snowflake-dcm-projects-infrastructure-as-code-in-plain-sql",
+    "title": "Snowflake DCM Projects: Infrastructure as Code, in Plain SQL",
+    "summary": "Snowflake DCM Projects explained: how DEFINE replaces CREATE, inherited grants vs future grants, bootstrapping ACCOUNTADMIN, and CI/CD with GitHub Actions",
+    "author": "Jeff Skoldberg",
+    "image": "https://cdn.sanity.io/images/wn0ylp2c/production/73f5a5f1f675fa2c59be3f8eb430f1d62b754960-2400x1256.png?rect=4,0,2392,1256\u0026w=1200\u0026h=630",
+    "published": "2026-09-15T15:40:00Z",
+    "content_blocks": 1,
+    "content_chars": 16592,
+    "content_elements": {
+      "h2": 16,
+      "h3": 2,
+      "img": 14,
+      "ol": 6,
+      "p": 73,
+      "pre": 12,
+      "ul": 3
+    },
+    "content_start": "TLDRDCM Projects are Snowflake's native, declarative way to manage objects as c…",
+    "content_sha256": "4e276e6a434dd070",
+    "sources": {
+      "author": "meta:article:author",
+      "canonical": "request",
+      "content": "div[class~=\"prose-p:!my-0\"]",
+      "image": "meta:og:image",
+      "published": "listing:published",
+      "summary": "meta:og:description",
+      "title": "meta:og:title"
+    }
+  }
+]
