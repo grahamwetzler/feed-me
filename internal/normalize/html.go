@@ -101,8 +101,8 @@ func flattenCode(s *goquery.Selection) {
 	})
 }
 
-// codeText writes n's text, turning <br> and the ends of block-level line
-// wrappers into newlines, since highlighters often mark lines that way.
+// codeText writes n's text, turning <br> and the start and end of block-level
+// line wrappers into newlines, since highlighters often mark lines that way.
 func codeText(b *strings.Builder, n *html.Node) {
 	switch n.Type {
 	case html.TextNode:
