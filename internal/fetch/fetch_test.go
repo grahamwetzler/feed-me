@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -306,6 +307,31 @@ func TestRobotsCacheIsPerHeaderSet(t *testing.T) {
 	}
 	if n := robotsCalls.Load(); n != 2 {
 		t.Errorf("robots.txt fetched %d times, want 2 (one per header set)", n)
+	}
+}
+
+func TestRobotsCacheDropsExpiredEntries(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+	now := time.Now()
+	c.robots.now = func() time.Time { return now }
+	ctx := context.Background()
+	for i := range 5 {
+		o := fast
+		o.Headers = map[string]string{"Authorization": "Bearer " + strconv.Itoa(i)}
+		if _, err := c.Site(o).Fetch(ctx, Request{URL: srv.URL + "/x"}); err != nil {
+			t.Fatal(err)
+		}
+		now = now.Add(robotsTTL) // each token's entry expires before the next is used
+	}
+	c.robots.mu.Lock()
+	n := len(c.robots.m)
+	c.robots.mu.Unlock()
+	if n != 1 {
+		t.Errorf("robots cache holds %d entries, want 1 (expired ones dropped)", n)
 	}
 }
 

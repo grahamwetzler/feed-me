@@ -26,7 +26,7 @@ type robotsEntry struct {
 	expires time.Time
 }
 
-// robotsCache holds one parsed robots.txt per scheme+host.
+// robotsCache holds one parsed robots.txt per scheme+host and header set.
 type robotsCache struct {
 	c   *Client
 	mu  sync.Mutex
@@ -92,8 +92,16 @@ func (r *robotsCache) get(ctx context.Context, u *url.URL, o Options) (*robotstx
 	if status >= 500 {
 		ttl = robotsErrorTTL
 	}
+	now := r.now()
 	r.mu.Lock()
-	r.m[key] = robotsEntry{data: data, expires: r.now().Add(ttl)}
+	// Drop expired entries so header sets that rotate away (a refreshed
+	// token, say) don't accumulate.
+	for k, e := range r.m {
+		if !now.Before(e.expires) {
+			delete(r.m, k)
+		}
+	}
+	r.m[key] = robotsEntry{data: data, expires: now.Add(ttl)}
 	r.mu.Unlock()
 	return data, nil
 }
