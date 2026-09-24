@@ -35,8 +35,8 @@ func TestBody(t *testing.T) {
 		},
 		{
 			name: "code lines marked by markup",
-			in:   `<pre><div>first</div><div>second</div></pre><pre>a<br>b</pre>`,
-			want: "<pre><code>first\nsecond</code></pre><pre><code>a\nb</code></pre>",
+			in:   `<pre><div>first</div><div>second</div></pre><pre>a<br>b</pre><pre>x<div>y</div>z</pre>`,
+			want: "<pre><code>first\nsecond</code></pre><pre><code>a\nb</code></pre><pre><code>x\ny\nz</code></pre>",
 		},
 		{
 			name: "space between inline elements kept",

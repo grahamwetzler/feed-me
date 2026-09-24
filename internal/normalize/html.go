@@ -114,14 +114,18 @@ func codeText(b *strings.Builder, n *html.Node) {
 			return
 		}
 	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		codeText(b, c)
-	}
-	if n.Type == html.ElementNode && (blockElements[n.DataAtom] || n.DataAtom == atom.Li || n.DataAtom == atom.Tr) {
-		if s := b.String(); s != "" && !strings.HasSuffix(s, "\n") {
+	block := n.Type == html.ElementNode && (blockElements[n.DataAtom] || n.DataAtom == atom.Li || n.DataAtom == atom.Tr)
+	// A block wrapper is a line of its own: break before it as well as after.
+	lineBreak := func() {
+		if s := b.String(); block && s != "" && !strings.HasSuffix(s, "\n") {
 			b.WriteByte('\n')
 		}
 	}
+	lineBreak()
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		codeText(b, c)
+	}
+	lineBreak()
 }
 
 var (
