@@ -76,6 +76,13 @@ var migrations = []string{
 		status        INTEGER NOT NULL,
 		PRIMARY KEY (site_id, url)
 	);`,
+	// 3: when each served feed's bytes last changed, so Last-Modified
+	// survives a restart that renders the same feed.
+	`CREATE TABLE feed_stamps (
+		path        TEXT PRIMARY KEY,              -- below base_path, e.g. feeds/x.xml
+		etag        TEXT NOT NULL,
+		modified_at INTEGER NOT NULL
+	);`,
 }
 
 // Open opens (creating if needed) the database at path and migrates it.
@@ -369,6 +376,32 @@ func (s *Store) PutSiteState(ctx context.Context, siteID string, st SiteState) e
 			last_success_at = excluded.last_success_at, last_change_at = excluded.last_change_at,
 			last_error = excluded.last_error`,
 		siteID, toNull(st.LastRun), toNull(st.LastSuccess), toNull(st.LastChange), st.LastError)
+	return err
+}
+
+// FeedStamp is a served feed's ETag and the time its bytes last changed.
+type FeedStamp struct {
+	ETag     string
+	Modified time.Time
+}
+
+// FeedStamp returns the stamp stored for path (zero if none).
+func (s *Store) FeedStamp(ctx context.Context, path string) (FeedStamp, error) {
+	var fs FeedStamp
+	var ms int64
+	err := s.db.QueryRowContext(ctx, `SELECT etag, modified_at FROM feed_stamps WHERE path = ?`, path).Scan(&fs.ETag, &ms)
+	if errors.Is(err, sql.ErrNoRows) {
+		return FeedStamp{}, nil
+	}
+	fs.Modified = fromMS(ms)
+	return fs, err
+}
+
+// PutFeedStamp replaces the stamp for path.
+func (s *Store) PutFeedStamp(ctx context.Context, path string, fs FeedStamp) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO feed_stamps (path, etag, modified_at) VALUES (?, ?, ?)
+		ON CONFLICT (path) DO UPDATE SET etag = excluded.etag, modified_at = excluded.modified_at`,
+		path, fs.ETag, toMS(fs.Modified))
 	return err
 }
 

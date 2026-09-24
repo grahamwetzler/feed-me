@@ -191,6 +191,34 @@ func TestLastModifiedFollowsContent(t *testing.T) {
 	}
 }
 
+func TestLastModifiedSurvivesRestart(t *testing.T) {
+	f := newFixture(t, "/")
+	ctx := context.Background()
+	must(t, f.srv.Refresh(ctx, f.site))
+	first := f.get(t, "/feeds/claude-blog.atom").Header()
+
+	restart := func() {
+		f.srv = New(f.srv.global, f.srv.sites, f.store, "rss-er/test", slog.New(slog.DiscardHandler))
+		f.srv.now = func() time.Time { return f.clock }
+		f.h = f.srv.Handler()
+		f.clock = f.clock.Add(time.Hour)
+		must(t, f.srv.Refresh(ctx, f.site))
+	}
+	restart()
+	if h := f.get(t, "/feeds/claude-blog.atom").Header(); h.Get("Last-Modified") != first.Get("Last-Modified") {
+		t.Errorf("same bytes after a restart: Last-Modified %s → %s", first.Get("Last-Modified"), h.Get("Last-Modified"))
+	}
+	if w := f.get(t, "/feeds/claude-blog.atom", "If-Modified-Since", first.Get("Last-Modified")); w.Code != http.StatusNotModified {
+		t.Errorf("If-Modified-Since after a restart: %d, want 304", w.Code)
+	}
+
+	f.site.Channel.Title = "Renamed" // changed while the process was down
+	restart()
+	if h := f.get(t, "/feeds/claude-blog.atom").Header(); h.Get("Last-Modified") != "Sun, 20 Sep 2026 19:00:00 GMT" {
+		t.Errorf("changed bytes after a restart: Last-Modified %s", h.Get("Last-Modified"))
+	}
+}
+
 func TestPartialRefreshKeepsFailingFormat(t *testing.T) {
 	f := newFixture(t, "/")
 	ctx := context.Background()

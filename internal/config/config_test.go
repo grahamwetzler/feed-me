@@ -312,3 +312,23 @@ func TestListenNeedsAPort(t *testing.T) {
 		}
 	}
 }
+
+func TestBasePathMustBeLiteral(t *testing.T) {
+	t.Setenv(EnvPublicBaseURL, "")
+	for base, want := range map[string]string{
+		"/": "/", "/rss": "/rss/", "/rss/": "/rss/", "/a/b-c.d~e_f/": "/a/b-c.d~e_f/",
+		"/a{b/": "", "/{x}/": "", "/a//b/": "", "/a b/": "", "/../": "", "/a/./": "", "/%41/": "",
+	} {
+		path := filepath.Join(t.TempDir(), "rss-er.yaml")
+		must(t, os.WriteFile(path, []byte("public_base_url: https://rss.example.com\nbase_path: \""+base+"\"\n"), 0o644))
+		g, err := LoadGlobal(path)
+		switch {
+		case want == "" && (err == nil || !strings.Contains(err.Error(), "base_path")):
+			t.Errorf("base_path %q: err = %v, want a base_path error", base, err)
+		case want != "" && err != nil:
+			t.Errorf("base_path %q: %v", base, err)
+		case want != "" && g.BasePath != want:
+			t.Errorf("base_path %q became %q, want %q", base, g.BasePath, want)
+		}
+	}
+}

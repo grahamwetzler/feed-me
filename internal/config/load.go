@@ -310,6 +310,11 @@ func loadGlobal(path string) (*Global, Errors) {
 	if !strings.HasSuffix(g.BasePath, "/") {
 		g.BasePath += "/"
 	}
+	if strings.HasPrefix(g.BasePath, "/") && (!basePath.MatchString(g.BasePath) ||
+		strings.Contains(g.BasePath, "/./") || strings.Contains(g.BasePath, "/../")) {
+		// It becomes part of the server's route patterns, so it must be literal.
+		v.err(p("base_path"), "must be /, or /-separated path segments of letters, digits and -._~, got %q", g.BasePath)
+	}
 	if g.ContactURL != "" {
 		v.absURL(p("contact_url"), g.ContactURL, false)
 	}
@@ -344,6 +349,10 @@ func loadGlobal(path string) (*Global, Errors) {
 }
 
 var siteIDPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
+
+// basePath is a base_path the server can put into its route patterns as is.
+// Dot segments are rejected separately, since the router cleans them away.
+var basePath = regexp.MustCompile(`^/([A-Za-z0-9._~-]+/)*$`)
 
 // LoadSite reads and validates one site file. Fetch settings it leaves unset
 // are inherited from g.

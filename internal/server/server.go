@@ -56,7 +56,8 @@ func New(g *config.Global, sites []*config.Site, st *store.Store, generator stri
 // keeps being served (§8.1, observability).
 //
 // Last-Modified moves whenever the bytes do, not only when items change: a
-// config edit or a new version can change a feed without a new item.
+// config edit or a new version can change a feed without a new item. It
+// survives a restart that renders the same bytes.
 func (s *Server) Refresh(ctx context.Context, site *config.Site) error {
 	var errs []string
 	for _, f := range s.formats {
@@ -75,11 +76,9 @@ func (s *Server) Refresh(ctx context.Context, site *config.Site) error {
 			continue
 		}
 		sum := sha256.Sum256(data)
-		r := &rendered{data: data, etag: `"` + hex.EncodeToString(sum[:16]) + `"`, modified: s.now(), ctype: f.ContentType}
+		r := &rendered{data: data, etag: `"` + hex.EncodeToString(sum[:16]) + `"`, ctype: f.ContentType}
+		r.modified = s.modified(ctx, path, r.etag)
 		s.mu.Lock()
-		if prev := s.feeds[path]; prev != nil && prev.etag == r.etag {
-			r.modified = prev.modified
-		}
 		s.feeds[path] = r
 		s.mu.Unlock()
 	}
@@ -87,6 +86,31 @@ func (s *Server) Refresh(ctx context.Context, site *config.Site) error {
 		return fmt.Errorf("keeping the last good feed: %s", strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// modified is when the feed at path last changed: unchanged if its ETag
+// matches the one served or, after a restart, the one stored; otherwise now,
+// which is stored for the next restart.
+func (s *Server) modified(ctx context.Context, path, etag string) time.Time {
+	s.mu.RLock()
+	prev := s.feeds[path]
+	s.mu.RUnlock()
+	if prev != nil && prev.etag == etag {
+		return prev.modified
+	}
+	if prev == nil {
+		stamp, err := s.store.FeedStamp(ctx, path)
+		if err != nil {
+			s.log.Warn("reading feed stamp", "feed", path, "err", err)
+		} else if stamp.ETag == etag {
+			return stamp.Modified
+		}
+	}
+	now := s.now().UTC()
+	if err := s.store.PutFeedStamp(ctx, path, store.FeedStamp{ETag: etag, Modified: now}); err != nil {
+		s.log.Warn("storing feed stamp; Last-Modified will move on restart", "feed", path, "err", err)
+	}
+	return now
 }
 
 // Handler serves everything below base_path; any other path is a 404.
@@ -142,7 +166,9 @@ func (s *Server) known(file string) bool {
 }
 
 // serveReady answers 200 once every site has completed a successful run
-// (§8.1) and every one of its feeds can be served.
+// (§8.1) and every one of its feeds can be served. One unservable site keeps
+// the whole process not ready on purpose, to surface it; the other feeds are
+// still served, and traffic and restarts go by /healthz.
 func (s *Server) serveReady(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	var waiting []string

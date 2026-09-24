@@ -397,7 +397,8 @@ The service runs as a long-lived `rss-er run` container behind the user's existi
 
 **Health and lifecycle:**
 - Distroless has no shell or `curl`, so the healthcheck is a subcommand: `HEALTHCHECK CMD ["/rss-er", "healthcheck"]`. It hits `http://127.0.0.1:8080/healthz`.
-- `/healthz` returns 200 while the process is up. `/readyz` returns 200 only once every site has completed at least one successful run.
+- `/healthz` returns 200 while the process is up. `/readyz` returns 200 only once every site has completed at least one successful run and every one of its feeds can be served. It is deliberately all-or-nothing: a site that stores no items, or whose feed keeps failing its checks, keeps `/readyz` at 503 and names the site, while the other feeds are still served. So route traffic and restarts on `/healthz` (as the `HEALTHCHECK` does), and use `/readyz` to find a broken site.
+- `Last-Modified` is the time a feed's bytes last changed. It is stored with the feed's `ETag`, so a restart that renders the same bytes keeps it.
 - On `SIGTERM`, it finishes the in-flight page fetch, stops the scheduler, drains HTTP connections (10s) and closes the DB cleanly.
 - On startup, a site whose last run is older than its `interval` runs immediately. Otherwise it waits for its next tick. Restarts therefore don't cause a burst of fetches.
 
