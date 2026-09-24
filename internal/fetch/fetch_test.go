@@ -259,6 +259,8 @@ func TestRedirectToAnotherDomainDropsCredentials(t *testing.T) {
 	if _, err := c.Site(o).Fetch(context.Background(), Request{URL: "http://src.test/r"}); err != nil {
 		t.Fatal(err)
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	var dstRobots bool
 	for _, r := range reqs {
 		if !strings.HasPrefix(r.host, "dst.test") {
@@ -274,6 +276,36 @@ func TestRedirectToAnotherDomainDropsCredentials(t *testing.T) {
 	}
 	if !dstRobots {
 		t.Errorf("destination robots.txt never checked: %+v", reqs)
+	}
+}
+
+func TestRobotsCacheIsPerHeaderSet(t *testing.T) {
+	var robotsCalls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/robots.txt" {
+			robotsCalls.Add(1)
+			if r.Header.Get("Authorization") == "" {
+				w.WriteHeader(http.StatusUnauthorized) // anonymous: 4xx, read as allow-all
+				return
+			}
+			_, _ = w.Write([]byte("User-agent: *\nDisallow: /private/\n"))
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+	c := newTestClient(srv)
+	ctx := context.Background()
+	if _, err := c.Site(fast).Fetch(ctx, Request{URL: srv.URL + "/private/x"}); err != nil {
+		t.Fatalf("anonymous: %v", err)
+	}
+	authed := fast
+	authed.Headers = map[string]string{"Authorization": "Bearer t"}
+	if _, err := c.Site(authed).Fetch(ctx, Request{URL: srv.URL + "/private/x"}); !errors.Is(err, ErrDisallowed) {
+		t.Errorf("authenticated lookup reused the anonymous robots.txt: %v", err)
+	}
+	if n := robotsCalls.Load(); n != 2 {
+		t.Errorf("robots.txt fetched %d times, want 2 (one per header set)", n)
 	}
 }
 

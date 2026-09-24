@@ -2,8 +2,14 @@ package fetch
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"maps"
+	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 	"time"
 
@@ -52,7 +58,10 @@ func (r *robotsCache) allowed(ctx context.Context, u *url.URL, o Options) (bool,
 }
 
 func (r *robotsCache) get(ctx context.Context, u *url.URL, o Options) (*robotstxt.RobotsData, error) {
-	key := u.Scheme + "://" + u.Host
+	origin := u.Scheme + "://" + u.Host
+	// The answer can depend on the headers sent (credentials, say), so
+	// lookups with different headers don't share a cache entry.
+	key := origin + "\x00" + headersKey(o.Headers)
 	r.mu.Lock()
 	e, ok := r.m[key]
 	r.mu.Unlock()
@@ -63,7 +72,7 @@ func (r *robotsCache) get(ctx context.Context, u *url.URL, o Options) (*robotstx
 	// Fetch through the rate limiter, but never check robots for robots.txt
 	// itself, including where it redirects: that would recurse into this lookup.
 	o.RespectRobots = false
-	resp, err := r.c.do(ctx, Request{URL: key + "/robots.txt"}, o)
+	resp, err := r.c.do(ctx, Request{URL: origin + "/robots.txt"}, o)
 	status, body := 200, []byte(nil)
 	var se *StatusError
 	switch {
@@ -87,4 +96,16 @@ func (r *robotsCache) get(ctx context.Context, u *url.URL, o Options) (*robotstx
 	r.m[key] = robotsEntry{data: data, expires: r.now().Add(ttl)}
 	r.mu.Unlock()
 	return data, nil
+}
+
+// headersKey is a stable, compact identity for a header set.
+func headersKey(h map[string]string) string {
+	if len(h) == 0 {
+		return ""
+	}
+	sum := sha256.New()
+	for _, k := range slices.Sorted(maps.Keys(h)) {
+		fmt.Fprintf(sum, "%s\x00%s\x00", http.CanonicalHeaderKey(k), h[k])
+	}
+	return hex.EncodeToString(sum.Sum(nil)[:8])
 }
