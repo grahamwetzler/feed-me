@@ -525,4 +525,38 @@ func TestGainedSourceDateIsStored(t *testing.T) {
 	}
 }
 
+func TestLostSourceDateIsKept(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, la)
+	r := newRunner(t, &now)
+	_, undated := loadSite(t, "claude-blog", func(s string) string {
+		s = claudeLinks(s)
+		i, j := strings.Index(s, "  published:"), strings.Index(s, "  updated:")
+		return s[:i] + "  published:\n    sources: [meta:no-such-date]\n" + s[j:]
+	})
+	_, site := loadSite(t, "claude-blog", claudeLinks)
+	files := postFiles("claude-blog", "https://claude.com/blog/")
+	f, _ := fetcherFor(files)
+	run := func(s *config.Site) *store.Item {
+		t.Helper()
+		if _, err := r.Run(ctx, s, f); err != nil {
+			t.Fatal(err)
+		}
+		it, _ := r.Store.ItemByURL(ctx, site.ID, trowe)
+		return it
+	}
+	before := run(site)
+	now = now.Add(time.Hour)
+	if got := run(undated); got.SourcePublished != "2026-09-10" {
+		t.Fatalf("undated run cleared the source date: %q", got.SourcePublished)
+	}
+	now = now.Add(time.Hour)
+	files[trowe] = editedCopy(t, files[trowe], "Sep 10, 2026", "Sep 8, 2026")
+	f, _ = fetcherFor(files)
+	after := run(site)
+	if after.SourcePublished != "2026-09-08" || after.Published.Equal(before.Published) {
+		t.Errorf("source date %q (want 2026-09-08), published %v (want recomputed from %v)", after.SourcePublished, after.Published, before.Published)
+	}
+}
+
 func discard() *slog.Logger { return slog.New(slog.DiscardHandler) }

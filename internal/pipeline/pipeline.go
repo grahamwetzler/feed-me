@@ -328,6 +328,11 @@ func (r *Runner) apply(ctx context.Context, site *config.Site, t target, resp *f
 	it.GUID, it.FirstSeen = existing.GUID, existing.FirstSeen
 	it.Published, it.PublishedSource = existing.Published, existing.PublishedSource
 	it.Updated, it.MissingSince = existing.Updated, time.Time{}
+	if it.SourcePublished == "" {
+		// A date missing from one fetch isn't a change: keep the stored one so
+		// a move is still detected when the date comes back.
+		it.SourcePublished = existing.SourcePublished
+	}
 	if existing.SourcePublished != "" && it.SourcePublished != "" && it.SourcePublished != existing.SourcePublished {
 		// The site itself moved the publish date to another day (§5.3): the one
 		// case where a frozen timestamp is recomputed.
