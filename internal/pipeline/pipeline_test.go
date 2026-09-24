@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"log/slog"
 	"net/http"
@@ -575,3 +576,37 @@ func TestLostSourceDateIsKept(t *testing.T) {
 }
 
 func discard() *slog.Logger { return slog.New(slog.DiscardHandler) }
+
+// stopAfterFirst closes stop once the first page fetch returns.
+type stopAfterFirst struct {
+	fetch.Fetcher
+	stop    chan struct{}
+	fetches int
+}
+
+func (s *stopAfterFirst) Fetch(ctx context.Context, req fetch.Request) (*fetch.Response, error) {
+	resp, err := s.Fetcher.Fetch(ctx, req)
+	if s.fetches++; s.fetches == 1 {
+		close(s.stop)
+	}
+	return resp, err
+}
+
+func TestStopEndsRunAfterPageInFlight(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 10, 9, 30, 0, 0, la)
+	r := newRunner(t, &now)
+	_, site := loadSite(t, "claude-blog", claudeLinks)
+	f, _ := fetcherFor(postFiles("claude-blog", "https://claude.com/blog/"))
+	sf := &stopAfterFirst{Fetcher: f, stop: make(chan struct{})}
+	r.Stop = sf.stop
+
+	st, err := r.Run(ctx, site, sf)
+	if !errors.Is(err, ErrStopped) || st.New != 1 || sf.fetches != 1 {
+		t.Errorf("stopped run: %+v, %d fetches, err %v; want the one page in flight stored", st, sf.fetches, err)
+	}
+	state, _ := r.Store.SiteState(ctx, site.ID)
+	if !state.LastRun.IsZero() {
+		t.Errorf("a stopped run recorded state %+v; it should run again at the next start", state)
+	}
+}

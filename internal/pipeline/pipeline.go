@@ -54,7 +54,15 @@ type Runner struct {
 	Store *store.Store
 	Log   *slog.Logger
 	Now   func() time.Time // replaceable in tests
+
+	// Stop, when closed, ends a run after the page in flight (§8.1, SIGTERM).
+	// The run returns ErrStopped and records nothing, so the site runs again
+	// at the next start.
+	Stop <-chan struct{}
 }
+
+// ErrStopped is returned by a run ended early through Runner.Stop.
+var ErrStopped = errors.New("run stopped")
 
 func (r *Runner) now() time.Time {
 	if r.Now != nil {
@@ -108,6 +116,12 @@ func (r *Runner) Run(ctx context.Context, site *config.Site, f fetch.Fetcher) (S
 	for _, t := range targets {
 		if err := ctx.Err(); err != nil {
 			return fail(err)
+		}
+		select {
+		case <-r.Stop:
+			st.Duration = r.now().Sub(start)
+			return st, ErrStopped
+		default:
 		}
 		if err := r.process(ctx, site, f, t, start, &st, log); err != nil {
 			st.Errors++
