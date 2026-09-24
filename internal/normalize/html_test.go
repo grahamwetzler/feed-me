@@ -29,6 +29,26 @@ func TestBody(t *testing.T) {
 			want: `<p><a href="https://example.com/other">x</a> <img src="https://example.com/a.png" srcset="https://example.com/a.png 1x, https://example.com/blog/b@2x.png 2x" alt="A"/></p>`,
 		},
 		{
+			name: "srcset URL with commas",
+			in:   `<p><img src="/a.jpg" srcset="/i.jpg?crop=10,20 2x, /j.jpg,"></p>`,
+			want: `<p><img src="https://example.com/a.jpg" srcset="https://example.com/i.jpg?crop=10,20 2x, https://example.com/j.jpg"/></p>`,
+		},
+		{
+			name: "code lines marked by markup",
+			in:   `<pre><div>first</div><div>second</div></pre><pre>a<br>b</pre>`,
+			want: "<pre><code>first\nsecond</code></pre><pre><code>a\nb</code></pre>",
+		},
+		{
+			name: "space between inline elements kept",
+			in:   `<div><em>Hello</em> <strong>world</strong></div>`,
+			want: `<p><em>Hello</em> <strong>world</strong></p>`,
+		},
+		{
+			name: "divs of inline elements stay separate",
+			in:   `<div><em>one</em></div><div><em>two</em></div>`,
+			want: `<p><em>one</em></p><p><em>two</em></p>`,
+		},
+		{
 			name: "lazy images promoted, loading dropped",
 			in:   `<p><img src="data:image/gif;base64,R0lGOD" data-src="/real.jpg" data-srcset="/r.jpg 2x" loading="lazy" alt=""></p>`,
 			want: `<p><img src="https://example.com/real.jpg" alt="" srcset="https://example.com/r.jpg 2x"/></p>`,

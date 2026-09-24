@@ -2,7 +2,6 @@ package normalize
 
 import (
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -51,9 +50,16 @@ func ParseDate(value string, layouts []string, loc *time.Location) (Date, error)
 			if err != nil {
 				continue
 			}
-			// Minutes ("04") appear in every layout with a clock and in no date token.
-			return Date{Time: t, DateOnly: !strings.Contains(l, "04"), Layout: l}, nil
+			return Date{Time: t, DateOnly: !hasClock(l), Layout: l}, nil
 		}
 	}
 	return Date{}, fmt.Errorf("unrecognized date %q (add a matching Go layout to the field's layouts)", v)
+}
+
+// hasClock reports whether a layout carries a time of day: formatting two
+// instants on the same day through it gives different text only if it does.
+func hasClock(layout string) bool {
+	a := time.Date(2001, 2, 3, 0, 0, 0, 0, time.UTC)
+	b := time.Date(2001, 2, 3, 13, 14, 15, 0, time.UTC)
+	return a.Format(layout) != b.Format(layout)
 }

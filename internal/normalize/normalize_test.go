@@ -48,6 +48,8 @@ func TestParseDate(t *testing.T) {
 		{"Aug 07, 2026", []string{"Jan 2, 2006"}, "2026-08-07T00:00:00-07:00", true},
 		{"September 17, 2026", []string{"Jan 2, 2006", "January 2, 2006"}, "2026-09-17T00:00:00-07:00", true},
 		{"Monday, September 21, 2026", []string{"Monday, January 2, 2006"}, "2026-09-21T00:00:00-07:00", true},
+		{"2026-09-22 15", []string{"2006-01-02 15"}, "2026-09-22T15:00:00-07:00", false},
+		{"Sep 22, 2026 3:4 PM", []string{"Jan 2, 2006 3:4 PM"}, "2026-09-22T15:04:00-07:00", false},
 		// DST edge: standard time applies in December.
 		{"Dec 1, 2026", []string{"Jan 2, 2006"}, "2026-12-01T00:00:00-08:00", true},
 	}

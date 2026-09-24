@@ -90,9 +90,38 @@ func isPlaceholder(v string) bool {
 // stripped by the sanitizer anyway, and flattening keeps the line breaks.
 func flattenCode(s *goquery.Selection) {
 	s.Find("pre").Each(func(_ int, pre *goquery.Selection) {
-		text := strings.TrimRight(pre.Text(), "\n")
+		var b strings.Builder
+		for _, n := range pre.Nodes {
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				codeText(&b, c)
+			}
+		}
+		text := strings.TrimRight(b.String(), "\n")
 		pre.SetHtml("<code>" + html.EscapeString(text) + "</code>")
 	})
+}
+
+// codeText writes n's text, turning <br> and the ends of block-level line
+// wrappers into newlines, since highlighters often mark lines that way.
+func codeText(b *strings.Builder, n *html.Node) {
+	switch n.Type {
+	case html.TextNode:
+		b.WriteString(n.Data)
+		return
+	case html.ElementNode:
+		if n.DataAtom == atom.Br {
+			b.WriteByte('\n')
+			return
+		}
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		codeText(b, c)
+	}
+	if n.Type == html.ElementNode && (blockElements[n.DataAtom] || n.DataAtom == atom.Li || n.DataAtom == atom.Tr) {
+		if s := b.String(); s != "" && !strings.HasSuffix(s, "\n") {
+			b.WriteByte('\n')
+		}
+	}
 }
 
 var (
@@ -186,15 +215,43 @@ func absolutize(s *goquery.Selection, base *url.URL) {
 }
 
 // rewriteSrcset applies fn to each candidate URL, keeping its descriptor.
+// It tokenizes as the HTML spec does: a URL runs to the next whitespace (so it
+// may contain commas), and only trailing commas end a descriptor-less candidate.
 func rewriteSrcset(v string, fn func(string) string) string {
 	var out []string
-	for _, cand := range strings.Split(v, ",") {
-		f := strings.Fields(cand)
-		if len(f) == 0 {
-			continue
+	isSpace := func(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' }
+	for i := 0; i < len(v); {
+		for i < len(v) && (isSpace(v[i]) || v[i] == ',') {
+			i++
 		}
-		f[0] = fn(f[0])
-		out = append(out, strings.Join(f, " "))
+		start := i
+		for i < len(v) && !isSpace(v[i]) {
+			i++
+		}
+		u := v[start:i]
+		if u == "" {
+			break
+		}
+		var desc string
+		if trimmed := strings.TrimRight(u, ","); trimmed != u {
+			u = trimmed // "a.jpg," has no descriptor
+		} else {
+			start, depth := i, 0
+			for ; i < len(v) && (v[i] != ',' || depth > 0); i++ {
+				switch v[i] {
+				case '(':
+					depth++
+				case ')':
+					depth--
+				}
+			}
+			desc = strings.Join(strings.Fields(v[start:i]), " ")
+		}
+		cand := fn(u)
+		if desc != "" {
+			cand += " " + desc
+		}
+		out = append(out, cand)
 	}
 	return strings.Join(out, ", ")
 }
@@ -241,10 +298,16 @@ func policy(keepVideo bool) *bluemonday.Policy {
 	return p
 }
 
-// blockContainers hold only block content, so whitespace-only text in them is noise.
+// listContainers can't hold text at all, so whitespace-only text in them is noise.
+var listContainers = map[atom.Atom]bool{
+	atom.Ul: true, atom.Ol: true, atom.Dl: true, atom.Table: true,
+	atom.Thead: true, atom.Tbody: true, atom.Tfoot: true, atom.Tr: true,
+}
+
+// blockContainers usually hold blocks, where whitespace-only text is noise
+// only between blocks or at the edges: between inline elements it is a space.
 var blockContainers = map[atom.Atom]bool{
-	atom.Body: true, atom.Div: true, atom.Ul: true, atom.Ol: true, atom.Dl: true, atom.Table: true,
-	atom.Thead: true, atom.Tbody: true, atom.Tfoot: true, atom.Tr: true, atom.Figure: true, atom.Blockquote: true,
+	atom.Body: true, atom.Div: true, atom.Figure: true, atom.Blockquote: true,
 }
 
 var spaceRun = regexp.MustCompile(`[ \t\r\n\f]+`)
@@ -261,7 +324,10 @@ func tidy(n *html.Node) {
 				continue
 			}
 			c.Data = spaceRun.ReplaceAllString(c.Data, " ")
-			if strings.TrimSpace(c.Data) == "" && blockContainers[n.DataAtom] {
+			// Whitespace between inline elements separates words; it is only
+			// noise at the container's edges or next to a block.
+			if strings.TrimSpace(c.Data) == "" && (listContainers[n.DataAtom] ||
+				blockContainers[n.DataAtom] && isBlockEdge(c.PrevSibling) && isBlockEdge(c.NextSibling)) {
 				n.RemoveChild(c)
 			}
 		case html.ElementNode:
@@ -271,8 +337,8 @@ func tidy(n *html.Node) {
 				switch {
 				case isEmpty(c):
 					n.RemoveChild(c)
-				case c.DataAtom == atom.Div && hasOwnText(c):
-					// Text directly in a div would run into its neighbors' once
+				case c.DataAtom == atom.Div && hasInline(c):
+					// Inline content directly in a div would run into its neighbors' once
 					// unwrapped, so each run of inline content becomes a paragraph.
 					// Converting the div itself to <p> would be invalid if it also
 					// holds blocks, such as <h2>.
@@ -334,13 +400,33 @@ func wrapInlineRuns(n *html.Node) {
 	}
 }
 
-func hasOwnText(n *html.Node) bool {
+// hasInline reports whether n has inline text (loose or inside inline
+// elements) directly inside it, which would run into its neighbors' text if
+// unwrapped. Media alone doesn't count: a lone image needs no paragraph.
+func hasInline(n *html.Node) bool {
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if c.Type == html.TextNode && strings.TrimSpace(c.Data) != "" {
+		if !(c.Type == html.ElementNode && blockElements[c.DataAtom]) && hasText(c) {
 			return true
 		}
 	}
 	return false
+}
+
+func hasText(n *html.Node) bool {
+	if n.Type == html.TextNode {
+		return strings.TrimSpace(n.Data) != ""
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if hasText(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// isBlockEdge is true at a container's edge (nil) or next to a block element.
+func isBlockEdge(n *html.Node) bool {
+	return n == nil || n.Type == html.ElementNode && blockElements[n.DataAtom]
 }
 
 func unwrap(n *html.Node) {
