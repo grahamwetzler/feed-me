@@ -5,6 +5,8 @@ import (
 	"encoding/xml"
 	"strings"
 	"time"
+
+	"rss-er/internal/normalize"
 )
 
 type atomFeed struct {
@@ -144,16 +146,7 @@ func entryTitle(it Item) string {
 		return t
 	}
 	if d := strings.Join(strings.Fields(clean(it.Description)), " "); d != "" {
-		if r := []rune(d); len(r) > 80 {
-			// Cut at the last space that leaves room for the ellipsis, or
-			// mid-word only when the first 80 runes are a single word.
-			head := string(r[:80])
-			if i := strings.LastIndexByte(head, ' '); i > 0 {
-				return head[:i] + "…"
-			}
-			return string(r[:79]) + "…"
-		}
-		return d
+		return normalize.Excerpt(d, 80)
 	}
 	return it.Link
 }

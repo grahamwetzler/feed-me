@@ -111,9 +111,10 @@ func TestUntitledItemsPassBothChecks(t *testing.T) {
 		t.Errorf("missing %s\n%s", want, atom)
 	}
 	for desc, want := range map[string]string{
-		strings.Repeat("abcdefgh ", 10): strings.TrimSpace(strings.Repeat("abcdefgh ", 8)) + "…", // 80 runes end mid-word
-		strings.Repeat("é", 100):        strings.Repeat("é", 79) + "…",                           // one long word
-		"  short \n description  ":      "short description",
+		strings.Repeat("abcdefgh ", 10):                      strings.TrimSpace(strings.Repeat("abcdefgh ", 8)) + "…",    // 80 runes end mid-word
+		strings.Repeat("é", 100):                             strings.Repeat("é", 80) + "…",                              // one long word
+		"See https://example.com/" + strings.Repeat("x", 80): "See https://example.com/" + strings.Repeat("x", 56) + "…", // no stub title
+		"  short \n description  ":                           "short description",
 	} {
 		if got := entryTitle(Item{Description: desc}); got != want {
 			t.Errorf("title from %q: %q, want %q", desc, got, want)

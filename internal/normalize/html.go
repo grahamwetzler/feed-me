@@ -471,9 +471,10 @@ func Excerpt(text string, n int) string {
 	if utf8.RuneCountInString(text) <= n {
 		return text
 	}
-	r := []rune(text)[:n]
-	if i := strings.LastIndexByte(string(r), ' '); i > n/2 {
-		return strings.TrimRight(string(r)[:i], " ,;:.-") + "…"
+	head := string([]rune(text)[:n])
+	// Cut at a word only past halfway, so an early space can't leave a stub.
+	if i := strings.LastIndexByte(head, ' '); i > 0 && utf8.RuneCountInString(head[:i]) > n/2 {
+		return strings.TrimRight(head[:i], " ,;:.-") + "…"
 	}
-	return string(r) + "…"
+	return head + "…"
 }

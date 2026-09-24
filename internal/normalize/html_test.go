@@ -145,6 +145,10 @@ func TestPlainTextAndExcerpt(t *testing.T) {
 	if !strings.HasSuffix(ex, "…") || len([]rune(ex)) > 51 || strings.Contains(ex, "wor…") {
 		t.Errorf("Excerpt = %q", ex)
 	}
+	// The halfway rule counts runes: a boundary 6 runes (12 bytes) into 20 is too early.
+	if ex := Excerpt("éééééé "+strings.Repeat("x", 30), 20); ex != "éééééé "+strings.Repeat("x", 13)+"…" {
+		t.Errorf("multibyte Excerpt = %q", ex)
+	}
 	if Excerpt("short", 50) != "short" {
 		t.Error("short text changed")
 	}
