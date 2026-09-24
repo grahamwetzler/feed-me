@@ -5,3 +5,4 @@ out/
 *.db-shm
 # roborev snapshots
 /.roborev/
+/rss-er
