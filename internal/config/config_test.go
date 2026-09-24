@@ -345,10 +345,11 @@ func TestLoadDeployConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Load fails when sites_dir holds no site configs, so this pins which ones.
 	if got, _ := filepath.Abs(cfg.Global.SitesDir); got != want {
-		t.Errorf("sites_dir = %s, want %s", cfg.Global.SitesDir, want)
+		t.Errorf("sites_dir = %s, want %s", got, want)
 	}
-	if len(cfg.Sites) == 0 || cfg.Global.StorePath != "/data/rss-er.db" {
-		t.Errorf("%d sites, store_path %s", len(cfg.Sites), cfg.Global.StorePath)
+	if cfg.Global.StorePath != "/data/rss-er.db" {
+		t.Errorf("store_path = %s, want /data/rss-er.db", cfg.Global.StorePath)
 	}
 }
