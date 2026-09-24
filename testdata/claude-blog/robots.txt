@@ -1,0 +1,4 @@
+User-Agent: *
+Sitemap: https://claude.com/sitemap.xml
+Sitemap: https://claude.com/docs/sitemap.xml
+Allow: /
