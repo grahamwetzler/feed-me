@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -74,5 +75,35 @@ func TestRefusesNewerSchema(t *testing.T) {
 	s.Close()
 	if _, err := Open(ctx, path); err == nil || !strings.Contains(err.Error(), "newer than this build") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestPathWithURICharacters(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "odd?name#100%.db")
+	for i := 0; i < 2; i++ { // create, then reopen
+		s, err := Open(ctx, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			if err := s.PutSiteState(ctx, "s", SiteState{LastError: "x"}); err != nil {
+				t.Fatal(err)
+			}
+		} else if st, _ := s.SiteState(ctx, "s"); st.LastError != "x" {
+			t.Errorf("reopened a different database: %+v", st)
+		}
+		var mode string
+		if err := s.db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&mode); err != nil || mode != "wal" {
+			t.Errorf("journal_mode = %q, %v; pragmas were dropped", mode, err)
+		}
+		s.Close()
+	}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), "odd?name#100%.db") {
+			t.Errorf("unexpected file %q", e.Name())
+		}
 	}
 }

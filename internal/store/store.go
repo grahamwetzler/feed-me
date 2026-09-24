@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // pure Go: no CGO, easy cross-compiles
@@ -71,7 +72,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 			return nil, err
 		}
 	}
-	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
+	dsn := "file:" + uriPath.Replace(path) + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -83,6 +84,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	return s, nil
 }
+
+// uriPath escapes the characters that would otherwise end or change the path
+// part of a SQLite file: URI.
+var uriPath = strings.NewReplacer("%", "%25", "?", "%3F", "#", "%23")
 
 func (s *Store) Close() error { return s.db.Close() }
 
