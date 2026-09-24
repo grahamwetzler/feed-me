@@ -141,6 +141,7 @@ func Atom(ch Channel, items []Item) ([]byte, error) {
 
 // entryTitle is the item's title or, since Atom requires one where RSS
 // accepts a description alone, the start of its description or its link.
+// A description is cut like an excerpt: at most 80 runes plus an ellipsis.
 func entryTitle(it Item) string {
 	if t := strings.TrimSpace(clean(it.Title)); t != "" {
 		return t
