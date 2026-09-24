@@ -79,8 +79,7 @@ func cmdBuild(args []string, stdout, stderr io.Writer) int {
 			log.Error("run failed", "err", err)
 			failed = true
 		} else {
-			log.Info("run complete", "discovered", st.Discovered, "fetched", st.Fetched, "not_modified", st.NotModified,
-				"new_items", st.New, "updated_items", st.Updated, "unchanged", st.Unchanged, "errors", st.Errors, "duration", st.Duration.Round(time.Millisecond))
+			logRun(log, st)
 			// Stored items still make a feed, but the exit status must show that
 			// some pages couldn't be refreshed.
 			failed = failed || st.Errors > 0
@@ -117,4 +116,11 @@ func writeFeed(ctx context.Context, e *env, site *config.Site, f pipeline.Format
 		return 0, fmt.Errorf("rendered feed failed its checks: %s", strings.Join(probs, "; "))
 	}
 	return n, pipeline.WriteFileAtomic(path, data)
+}
+
+// logRun writes the one line per run that §8.1 (observability) asks for.
+func logRun(log *slog.Logger, st pipeline.Stats) {
+	log.Info("run complete", "discovered", st.Discovered, "fetched", st.Fetched, "not_modified", st.NotModified,
+		"new_items", st.New, "updated_items", st.Updated, "unchanged", st.Unchanged, "errors", st.Errors,
+		"duration", st.Duration.Round(time.Millisecond))
 }

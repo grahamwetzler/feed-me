@@ -54,9 +54,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return cmdBuild(args, stdout, stderr)
 	case "validate":
 		return cmdValidate(args, stdout, stderr)
-	case "run", "healthcheck":
-		fmt.Fprintf(stderr, "rss-er %s: not implemented yet\n", cmd)
-		return 1
+	case "run":
+		return cmdRun(args, stdout, stderr)
+	case "healthcheck":
+		return cmdHealthcheck(args, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, "rss-er", version)
 		return 0
