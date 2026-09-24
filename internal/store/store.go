@@ -63,6 +63,19 @@ var migrations = []string{
 		last_change_at  INTEGER,                     -- drives <lastBuildDate> (§5.7)
 		last_error      TEXT NOT NULL DEFAULT ''
 	);`,
+	// 2: validators per site, plus the listing hints they were stored with. It
+	// is only a cache, so the old rows are dropped (one full fetch each).
+	`DROP TABLE http_cache;
+	CREATE TABLE http_cache (
+		site_id       TEXT NOT NULL,
+		url           TEXT NOT NULL,
+		etag          TEXT NOT NULL DEFAULT '',
+		last_modified TEXT NOT NULL DEFAULT '',
+		hints_hash    TEXT NOT NULL DEFAULT '',
+		fetched_at    INTEGER NOT NULL,
+		status        INTEGER NOT NULL,
+		PRIMARY KEY (site_id, url)
+	);`,
 }
 
 // Open opens (creating if needed) the database at path and migrates it.
@@ -295,16 +308,22 @@ func (s *Store) TouchFetched(ctx context.Context, siteID, guid string, at time.T
 	return err
 }
 
-// Validators are the HTTP cache validators from a previous fetch.
+// Validators are the HTTP cache validators from a previous fetch whose
+// response was fully processed and stored.
 type Validators struct {
 	ETag         string
 	LastModified string
+	// HintsHash identifies the listing hints the stored item was built from;
+	// when discovery's hints change, a 304 would hide the change.
+	HintsHash string
 }
 
-// Validators returns the stored validators for url (zero if none).
-func (s *Store) Validators(ctx context.Context, url string) (Validators, error) {
+// Validators returns the site's stored validators for url (zero if none).
+// They are per site: two sites fetching one URL each track their own copy.
+func (s *Store) Validators(ctx context.Context, siteID, url string) (Validators, error) {
 	var v Validators
-	err := s.db.QueryRowContext(ctx, `SELECT etag, last_modified FROM http_cache WHERE url = ?`, url).Scan(&v.ETag, &v.LastModified)
+	err := s.db.QueryRowContext(ctx, `SELECT etag, last_modified, hints_hash FROM http_cache WHERE site_id = ? AND url = ?`,
+		siteID, url).Scan(&v.ETag, &v.LastModified, &v.HintsHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Validators{}, nil
 	}
@@ -312,12 +331,12 @@ func (s *Store) Validators(ctx context.Context, url string) (Validators, error) 
 }
 
 // PutValidators records the validators and status of a fetch.
-func (s *Store) PutValidators(ctx context.Context, url string, v Validators, status int, at time.Time) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO http_cache (url, etag, last_modified, fetched_at, status)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT (url) DO UPDATE SET etag = excluded.etag, last_modified = excluded.last_modified,
-			fetched_at = excluded.fetched_at, status = excluded.status`,
-		url, v.ETag, v.LastModified, toMS(at), status)
+func (s *Store) PutValidators(ctx context.Context, siteID, url string, v Validators, status int, at time.Time) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO http_cache (site_id, url, etag, last_modified, hints_hash, fetched_at, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (site_id, url) DO UPDATE SET etag = excluded.etag, last_modified = excluded.last_modified,
+			hints_hash = excluded.hints_hash, fetched_at = excluded.fetched_at, status = excluded.status`,
+		siteID, url, v.ETag, v.LastModified, v.HintsHash, toMS(at), status)
 	return err
 }
 

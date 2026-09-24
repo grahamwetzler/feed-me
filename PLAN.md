@@ -478,11 +478,14 @@ items(
   content_hash TEXT, missing_since INTEGER,
   PRIMARY KEY (site_id, guid)
 );
-http_cache(url TEXT PRIMARY KEY, etag TEXT, last_modified TEXT, fetched_at INTEGER, status INTEGER);
+http_cache(site_id TEXT, url TEXT, etag TEXT, last_modified TEXT, hints_hash TEXT, fetched_at INTEGER, status INTEGER,
+           PRIMARY KEY (site_id, url));   -- per site; written only after the response is stored
 site_state(site_id TEXT PRIMARY KEY, last_run_at INTEGER, last_change_at INTEGER, last_error TEXT);
 ```
 
-`content_hash` is a SHA-256 of the normalized body. If a re-fetch produces a different hash, the item is marked updated and `last_change_at` is bumped. If the hash matches, nothing changes.
+`content_hash` is a SHA-256 of the normalized body. If a re-fetch produces a different hash, the item is marked updated and `last_change_at` is bumped. If the hash matches and the other stored fields (URL, canonical, author, image, categories, dates) are the same, nothing changes. A change to only those fields is stored without bumping `updated_at`.
+
+Validators are saved only after a response has been fully processed, so a failed extraction is retried with a full fetch. `hints_hash` records the discovery hints an item was built from. When they change (for example, the feed corrects a date), the next fetch is unconditional, because a 304 would hide the change.
 
 ---
 

@@ -3,6 +3,8 @@ package fetchtest
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +16,9 @@ import (
 // Unknown URLs get 404, which matches how robots.txt absence behaves.
 type Transport struct {
 	Files map[string]string
+	// ETags makes responses carry an ETag derived from the file's content and
+	// answers a matching If-None-Match with 304, like a real server.
+	ETags bool
 
 	mu       sync.Mutex
 	Requests []*http.Request
@@ -34,6 +39,16 @@ func (t *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("fetchtest: %w", err)
+	}
+	if t.ETags {
+		sum := sha256.Sum256(data)
+		etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+		resp.Header.Set("ETag", etag)
+		if r.Header.Get("If-None-Match") == etag {
+			resp.StatusCode = http.StatusNotModified
+			resp.Body = io.NopCloser(bytes.NewReader(nil))
+			return resp, nil
+		}
 	}
 	resp.StatusCode = http.StatusOK
 	resp.Body = io.NopCloser(bytes.NewReader(data))

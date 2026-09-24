@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
+	"slices"
 	"sort"
 	"time"
 
@@ -174,7 +176,7 @@ func plan(site *config.Site, cands []discovery.Candidate, known map[string]store
 		}
 	}
 
-	fresh = newestOnly(fresh, known, site.Schedule.MaxItems, loc)
+	fresh = newestOnly(fresh, known, site.Schedule.MaxItems, now, loc)
 
 	out := make([]target, 0, len(fresh)+len(refresh))
 	for _, c := range fresh {
@@ -186,8 +188,9 @@ func plan(site *config.Site, cands []discovery.Candidate, known map[string]store
 // newestOnly keeps the new candidates that would rank in the feed's top
 // maxItems alongside the stored items. It needs a published hint on every new
 // candidate; without one (a sitemap, say) every new candidate is fetched, since
-// fetching is the only way to learn its date.
-func newestOnly(fresh []discovery.Candidate, known map[string]store.Known, maxItems int, loc *time.Location) []discovery.Candidate {
+// fetching is the only way to learn its date. Date-only hints are placed as
+// publishedAt would place them, so a post dated today ranks at now, not midnight.
+func newestOnly(fresh []discovery.Candidate, known map[string]store.Known, maxItems int, now time.Time, loc *time.Location) []discovery.Candidate {
 	type ranked struct {
 		at   time.Time
 		cand *discovery.Candidate // nil for a stored item
@@ -198,7 +201,11 @@ func newestOnly(fresh []discovery.Candidate, known map[string]store.Known, maxIt
 		if err != nil {
 			return fresh
 		}
-		all = append(all, ranked{at: d.Time, cand: &fresh[i]})
+		at := d.Time
+		if d.DateOnly {
+			at, _ = dateOnlyAt(d.Time, now, fresh[i].Order, loc)
+		}
+		all = append(all, ranked{at: at, cand: &fresh[i]})
 	}
 	for _, k := range known {
 		all = append(all, ranked{at: k.Published})
@@ -217,25 +224,46 @@ func newestOnly(fresh []discovery.Candidate, known map[string]store.Known, maxIt
 
 // process fetches, extracts, normalizes and stores one candidate.
 func (r *Runner) process(ctx context.Context, site *config.Site, f fetch.Fetcher, t target, now time.Time, st *Stats, log *slog.Logger) error {
+	hh := hintsHash(t.cand.Hints)
 	req := fetch.Request{URL: t.cand.URL}
 	if t.known {
 		// Conditional GET only for stored items: a 304 for an unstored URL
-		// would leave nothing to extract.
-		v, err := r.Store.Validators(ctx, t.cand.URL)
+		// would leave nothing to extract. And only when discovery's hints are
+		// the ones the item was built from: a feed that corrects a date or
+		// title changes the item even when the page itself is unchanged.
+		v, err := r.Store.Validators(ctx, site.ID, t.cand.URL)
 		if err != nil {
 			return err
 		}
-		req.ETag, req.LastModified = v.ETag, v.LastModified
+		if v.HintsHash == hh {
+			req.ETag, req.LastModified = v.ETag, v.LastModified
+		}
 	}
 	resp, err := f.Fetch(ctx, req)
 	if err != nil {
 		return err
 	}
 	st.Fetched++
-	if err := r.Store.PutValidators(ctx, t.cand.URL, store.Validators{ETag: resp.ETag, LastModified: resp.LastModified}, resp.Status, now); err != nil {
+	if err := r.apply(ctx, site, t, resp, now, st, log); err != nil {
 		return err
 	}
+	// Saved only now: had extraction or storage failed, the next run must
+	// fetch in full rather than get a 304 for content that was never stored.
+	v := store.Validators{ETag: resp.ETag, LastModified: resp.LastModified, HintsHash: hh}
+	return r.Store.PutValidators(ctx, site.ID, t.cand.URL, v, resp.Status, now)
+}
 
+// hintsHash identifies a candidate's listing hints.
+func hintsHash(h map[string]string) string {
+	sum := sha256.New()
+	for _, k := range slices.Sorted(maps.Keys(h)) {
+		fmt.Fprintf(sum, "%s\x00%s\x00", k, h[k])
+	}
+	return hex.EncodeToString(sum.Sum(nil)[:16])
+}
+
+// apply turns one fetched response into a new, updated or unchanged item.
+func (r *Runner) apply(ctx context.Context, site *config.Site, t target, resp *fetch.Response, now time.Time, st *Stats, log *slog.Logger) error {
 	existing, err := r.Store.ItemByURL(ctx, site.ID, t.cand.URL)
 	if err != nil {
 		return err
@@ -295,17 +323,26 @@ func (r *Runner) process(ctx context.Context, site *config.Site, f fetch.Fetcher
 		log.Info("source publish date changed", "url", t.cand.URL, "from", existing.SourcePublished, "to", it.SourcePublished)
 	}
 
-	if it.ContentHash == existing.ContentHash && it.Published.Equal(existing.Published) {
+	edited := it.ContentHash != existing.ContentHash
+	if u := laterThan(res.Updated, it.Published); u.After(it.Updated) {
+		it.Updated = u
+	} else if edited {
+		it.Updated = now // edited without a newer dateModified
+	}
+	if !edited && it.Published.Equal(existing.Published) && it.Updated.Equal(existing.Updated) && sameMeta(it, existing) {
 		st.Unchanged++
 		return r.Store.TouchFetched(ctx, site.ID, existing.GUID, now)
 	}
-	if u := laterThan(res.Updated, it.Published); u.After(it.Updated) {
-		it.Updated = u
-	} else if it.ContentHash != existing.ContentHash {
-		it.Updated = now // edited without a newer dateModified
-	}
+	// Metadata-only changes (a new canonical, author, image or categories, or
+	// the article moving to a new URL) are stored too, without bumping Updated.
 	st.Updated++
 	return r.Store.PutItem(ctx, it)
+}
+
+// sameMeta compares the stored fields outside the content hash.
+func sameMeta(a, b *store.Item) bool {
+	return a.URL == b.URL && a.Canonical == b.Canonical && a.Author == b.Author &&
+		a.ImageURL == b.ImageURL && slices.Equal(a.Categories, b.Categories)
 }
 
 // build turns an extraction into an item, normalizing the body and summary.
@@ -356,12 +393,23 @@ func publishedAt(res *extract.Result, firstSeen time.Time, order int, loc *time.
 	case !res.PublishedDateOnly:
 		return res.Published, src
 	}
-	day := res.Published.In(loc)
+	at, usedFirstSeen := dateOnlyAt(res.Published, firstSeen, order, loc)
+	if usedFirstSeen {
+		return at, src + " (date) + first_seen time"
+	}
+	return at, src
+}
+
+// dateOnlyAt places a date-only value (§5.2): the first-seen time when first
+// seen that same local day, else local midnight plus a sub-second offset by
+// discovery order.
+func dateOnlyAt(date, firstSeen time.Time, order int, loc *time.Location) (time.Time, bool) {
+	day := date.In(loc)
 	if fs := firstSeen.In(loc); fs.Year() == day.Year() && fs.YearDay() == day.YearDay() {
-		return firstSeen, src + " (date) + first_seen time"
+		return firstSeen, true
 	}
 	midnight := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, loc)
-	return midnight.Add(time.Duration(999-min(order, 999)) * time.Millisecond), src
+	return midnight.Add(time.Duration(999-min(order, 999)) * time.Millisecond), false
 }
 
 // guidFor returns the canonical URL, or for guid: stable-hash a UUIDv5 of the

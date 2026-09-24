@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"rss-er/internal/config"
+	"rss-er/internal/discovery"
 	"rss-er/internal/extract"
 	"rss-er/internal/feed"
 	"rss-er/internal/fetch"
@@ -73,11 +74,18 @@ func postFiles(site, host string) map[string]string {
 // loadSite loads a shipped site config, applying edits to its YAML first.
 func loadSite(t *testing.T, id string, edit func(string) string) (*config.Global, *config.Site) {
 	t.Helper()
+	return loadSiteAs(t, id, id, edit)
+}
+
+// loadSiteAs loads a shipped site config under another site id.
+func loadSiteAs(t *testing.T, id, newID string, edit func(string) string) (*config.Global, *config.Site) {
+	t.Helper()
 	data, err := os.ReadFile(filepath.Join(root, "sites", id+".yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(t.TempDir(), id+".yaml")
+	data = []byte(strings.Replace(string(data), "id: "+id, "id: "+newID, 1))
+	path := filepath.Join(t.TempDir(), newID+".yaml")
 	if err := os.WriteFile(path, []byte(edit(string(data))), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -308,6 +316,163 @@ func TestPublishedAt(t *testing.T) {
 		if !got.Equal(tt.want) || src != tt.src {
 			t.Errorf("%s: got %v %q, want %v %q", tt.name, got, src, tt.want, tt.src)
 		}
+	}
+}
+
+const trowe = "https://claude.com/blog/t-rowe-price-brings-more-of-claude-to-its-investment-process"
+
+// editedCopy writes a copy of a fixture with every old replaced by new.
+func editedCopy(t *testing.T, path, old, new string) string {
+	t.Helper()
+	orig, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(orig), old) {
+		t.Fatalf("%s has no %q", path, old)
+	}
+	out := filepath.Join(t.TempDir(), filepath.Base(path))
+	if err := os.WriteFile(out, []byte(strings.ReplaceAll(string(orig), old, new)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// A failed extraction must not save the response's validators: once the
+// selector is fixed, the next run has to fetch in full, not get a 304.
+func TestFailedExtractionIsRetriedInFull(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, la)
+	r := newRunner(t, &now)
+	_, site := loadSite(t, "claude-blog", claudeLinks)
+	_, broken := loadSite(t, "claude-blog", func(s string) string {
+		return strings.Replace(claudeLinks(s), "blog_post_content_wrap", "no_such_wrap", 1)
+	})
+	files := postFiles("claude-blog", "https://claude.com/blog/")
+	f, tr := fetcherFor(files)
+	tr.ETags = true
+	if st, err := r.Run(ctx, site, f); err != nil || st.New != 4 {
+		t.Fatalf("first run: %+v %v", st, err)
+	}
+
+	files[trowe] = editedCopy(t, files[trowe], "T. Rowe Price", "T. Rowe Price Group")
+	now = now.Add(time.Hour)
+	if st, _ := r.Run(ctx, broken, f); st.Errors != 1 {
+		t.Fatalf("broken run: %+v", st)
+	}
+	now = now.Add(time.Hour)
+	st, err := r.Run(ctx, site, f)
+	if err != nil || st.Updated != 1 || st.NotModified != 0 {
+		t.Fatalf("fixed run: %+v %v", st, err)
+	}
+	if it, _ := r.Store.ItemByURL(ctx, site.ID, trowe); !strings.Contains(it.ContentHTML, "T. Rowe Price Group") {
+		t.Error("edit never stored")
+	}
+}
+
+// Two sites fetching one URL keep separate validators, so one site's
+// refresh can't turn the other's into a 304 for content it never stored.
+func TestValidatorsArePerSite(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, la)
+	r := newRunner(t, &now)
+	_, a := loadSite(t, "claude-blog", claudeLinks)
+	_, b := loadSiteAs(t, "claude-blog", "claude-copy", claudeLinks)
+	files := postFiles("claude-blog", "https://claude.com/blog/")
+	f, tr := fetcherFor(files)
+	tr.ETags = true
+	for _, s := range []*config.Site{a, b} {
+		if st, err := r.Run(ctx, s, f); err != nil || st.New != 4 {
+			t.Fatalf("%s: %+v %v", s.ID, st, err)
+		}
+	}
+	files[trowe] = editedCopy(t, files[trowe], "T. Rowe Price", "T. Rowe Price Group")
+	now = now.Add(time.Hour)
+	for _, s := range []*config.Site{a, b} {
+		if st, err := r.Run(ctx, s, f); err != nil || st.Updated != 1 {
+			t.Errorf("%s: %+v %v", s.ID, st, err)
+		}
+	}
+}
+
+// Fields outside the content hash still count: here the article turns up
+// under a new URL (a trailing slash) with the same canonical, so it is found
+// by GUID and must move to the new URL rather than look new every run.
+func TestMovedURLIsStored(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 11, 9, 0, 0, 0, la)
+	r := newRunner(t, &now)
+	_, site := loadSite(t, "claude-blog", claudeLinks)
+	files := postFiles("claude-blog", "https://claude.com/blog/")
+	f, _ := fetcherFor(files)
+	if _, err := r.Run(ctx, site, f); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := r.Store.ItemByURL(ctx, site.ID, trowe)
+
+	files[trowe+"/"] = files[trowe]
+	site.Discovery[0].URLs[0] = trowe + "/"
+	for i := 0; i < 2; i++ {
+		now = now.Add(time.Hour)
+		st, err := r.Run(ctx, site, f)
+		if err != nil || st.New != 0 {
+			t.Fatalf("run %d: %+v %v", i, st, err)
+		}
+	}
+	it, _ := r.Store.ItemByURL(ctx, site.ID, trowe+"/")
+	if it == nil || it.GUID != before.GUID || !it.Updated.Equal(before.Updated) {
+		t.Errorf("moved item: %+v", it)
+	}
+}
+
+// A new date-only candidate dated today ranks where publishedAt will put it
+// (now), not at midnight behind items already stored today.
+func TestNewestOnlyRanksDateOnlyHintsLikePublishedAt(t *testing.T) {
+	now := time.Date(2026, 9, 24, 15, 0, 0, 0, la)
+	known := map[string]store.Known{"https://e.com/a": {Published: time.Date(2026, 9, 24, 9, 0, 0, 0, la)}}
+	fresh := []discovery.Candidate{{URL: "https://e.com/b", Hints: map[string]string{"published": "2026-09-24"}}}
+	if got := newestOnly(fresh, known, 1, now, la); len(got) != 1 {
+		t.Errorf("new post dated today was not fetched: %+v", got)
+	}
+	// An older date-only candidate still loses to a newer stored item.
+	fresh[0].Hints["published"] = "2026-09-23"
+	if got := newestOnly(fresh, known, 1, now, la); len(got) != 0 {
+		t.Errorf("older post fetched: %+v", got)
+	}
+}
+
+// When discovery's hints change (the feed corrects a date), the page is
+// fetched in full even though it would answer 304, so the change lands.
+func TestChangedListingHintsBypass304(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 24, 17, 0, 0, 0, time.UTC)
+	r := newRunner(t, &now)
+	_, site := loadSite(t, "select-dev", func(s string) string {
+		return strings.Replace(s, "max_items: 50", "max_items: 4", 1)
+	})
+	files := postFiles("select-dev", "https://select.dev/posts/")
+	files["https://select.dev/posts/rss.xml"] = root + "/testdata/select-dev/rss.xml"
+	f, tr := fetcherFor(files)
+	tr.ETags = true
+	if st, err := r.Run(ctx, site, f); err != nil || st.New != 4 {
+		t.Fatalf("first run: %+v %v", st, err)
+	}
+
+	now = now.Add(time.Hour)
+	if st, _ := r.Run(ctx, site, f); st.NotModified != 4 {
+		t.Fatalf("steady state should be all 304s: %+v", st)
+	}
+
+	files["https://select.dev/posts/rss.xml"] = editedCopy(t, files["https://select.dev/posts/rss.xml"],
+		"Mon, 21 Sep 2026 15:12:00 GMT", "Tue, 22 Sep 2026 15:12:00 GMT")
+	now = now.Add(time.Hour)
+	st, err := r.Run(ctx, site, f)
+	if err != nil || st.NotModified != 3 || st.Updated != 1 {
+		t.Fatalf("hint change run: %+v %v", st, err)
+	}
+	it, _ := r.Store.ItemByURL(ctx, site.ID, "https://select.dev/posts/databricks-liquid-clustering-simplified")
+	if want := time.Date(2026, 9, 22, 15, 12, 0, 0, time.UTC); !it.Published.Equal(want) {
+		t.Errorf("published = %v, want the corrected %v", it.Published, want)
 	}
 }
 

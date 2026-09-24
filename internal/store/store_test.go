@@ -48,11 +48,14 @@ func TestMigrateAndRoundTrip(t *testing.T) {
 		t.Error("want nil for unknown URL")
 	}
 
-	if err := s.PutValidators(ctx, it.URL, Validators{ETag: `"e"`}, 200, now); err != nil {
+	if err := s.PutValidators(ctx, "s", it.URL, Validators{ETag: `"e"`, HintsHash: "h"}, 200, now); err != nil {
 		t.Fatal(err)
 	}
-	if v, _ := s.Validators(ctx, it.URL); v.ETag != `"e"` {
+	if v, _ := s.Validators(ctx, "s", it.URL); v.ETag != `"e"` || v.HintsHash != "h" {
 		t.Errorf("validators: %+v", v)
+	}
+	if v, _ := s.Validators(ctx, "other", it.URL); v != (Validators{}) {
+		t.Errorf("validators leaked across sites: %+v", v)
 	}
 	if err := s.PutSiteState(ctx, "s", SiteState{LastRun: now, LastError: "boom"}); err != nil {
 		t.Fatal(err)
