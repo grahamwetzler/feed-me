@@ -523,6 +523,8 @@ Validators are saved only after a response has been fully processed, so a failed
 | **M4** | `run` mode: scheduler + HTTP server with ETag/304, OPML, `/healthz` and `/readyz`, `healthcheck` subcommand; Atom output; Dockerfile + `compose.yaml` (§8.1) | Container running behind the reverse proxy, with a feed reader subscribed through the public URL; new posts arrive within one interval; state survives `docker compose down && up` |
 | **M5** | Second site, select.dev (§2.2, §4.4), to prove the config abstraction. It uses `feed` discovery, `listing` dates and meta-only extraction, which are different paths from the Claude blog. | `sites/select-dev.yaml` added with **zero Go changes**; the feed passes the W3C validator; titles contain no zero-width characters; bodies include code blocks and images |
 
+*Status (2026-09-24):* M0–M5 are implemented. M5 was checked against the live site: `rss-er validate --site select-dev --w3c` reports 0 errors for both the RSS and Atom feeds, and its only warning is `SelfDoesntMatchLocation`, because the feed is posted as raw data. No title has a zero-width character; the only ones are two lone U+200B the author put around links in post bodies, which §6a keeps. The 50 items contain 175 `<pre>` blocks and 230 images. No Go code is specific to select.dev. These exit criteria still need to be checked outside the code: subscribing in real readers (M2), 48 hours of hourly builds (M3), and the deployment behind the reverse proxy (M4).
+
 ---
 
 ## 12. Decisions and open questions
