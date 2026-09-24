@@ -48,6 +48,10 @@ func cmdCheck(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "rss-er check: --site is required")
 		return 2
 	}
+	if *limit < 1 {
+		fmt.Fprintln(stderr, "rss-er check: --limit must be at least 1")
+		return 2
+	}
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {

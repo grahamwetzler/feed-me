@@ -80,6 +80,9 @@ func cmdBuild(args []string, stdout, stderr io.Writer) int {
 		} else {
 			log.Info("run complete", "discovered", st.Discovered, "fetched", st.Fetched, "not_modified", st.NotModified,
 				"new_items", st.New, "updated_items", st.Updated, "unchanged", st.Unchanged, "errors", st.Errors, "duration", st.Duration.Round(time.Millisecond))
+			// Stored items still make a feed, but the exit status must show that
+			// some pages couldn't be refreshed.
+			failed = failed || st.Errors > 0
 		}
 
 		data, n, err := pipeline.RenderRSS(ctx, e.store, &e.cfg.Global, site, generator())
