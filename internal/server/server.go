@@ -223,7 +223,7 @@ type opmlOutline struct {
 }
 
 func (s *Server) serveOPML(w http.ResponseWriter, r *http.Request) {
-	doc := opml{Version: "2.0", Title: "feed-me feeds", Outline: make([]opmlOutline, len(s.sites))}
+	doc := opml{Version: "2.0", Title: "Feed Me! feeds", Outline: make([]opmlOutline, len(s.sites))}
 	for i, site := range s.sites {
 		o := &doc.Outline[i]
 		o.Type, o.Text, o.Title = "rss", site.Channel.Title, site.Channel.Title
@@ -247,9 +247,9 @@ var index = template.Must(template.New("index").Parse(`<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>feed-me</title>
+<title>Feed Me!</title>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem}li{margin:.5rem 0}</style>
-<h1>feed-me feeds</h1>
+<h1>Feed Me! feeds</h1>
 <ul>
 {{- range .Sites}}
 <li><a href="{{.Link}}">{{.Title}}</a>: <a href="{{.RSS}}">RSS</a> · <a href="{{.Atom}}">Atom</a></li>

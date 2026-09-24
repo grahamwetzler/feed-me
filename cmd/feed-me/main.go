@@ -20,7 +20,7 @@ var version = "dev"
 const usage = `Feed Me! turns websites into full-text RSS feeds.
 
 Usage:
-  feed-me run      [--config feed-me.yaml]   long-running: scheduler + HTTP server
+  feed-me run      [--config feed-me.yaml]  long-running: scheduler + HTTP server
   feed-me build    [--site id]              one-shot: fetch and write static feeds to out_dir
   feed-me check    --site id [--url URL]    dry-run extraction for one site
   feed-me validate [--site id] [--w3c]      render feeds from the store and check them

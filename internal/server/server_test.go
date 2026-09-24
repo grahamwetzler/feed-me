@@ -152,9 +152,12 @@ func TestBasePathIndexAndOPML(t *testing.T) {
 		`<outline type="rss" text="Claude Blog" title="Claude Blog" xmlUrl="https://rss.example.com/rss/feeds/claude-blog.xml" htmlUrl="https://claude.com/blog"></outline>`) {
 		t.Errorf("opml: %d\n%s", w.Code, w.Body)
 	}
+	if !strings.Contains(w.Body.String(), "<title>Feed Me! feeds</title>") {
+		t.Errorf("opml title:\n%s", w.Body)
+	}
 
 	w = f.get(t, "/rss/")
-	for _, want := range []string{`href="https://rss.example.com/rss/feeds/claude-blog.atom"`, `href="https://rss.example.com/rss/feeds.opml"`} {
+	for _, want := range []string{"<title>Feed Me!</title>", "<h1>Feed Me! feeds</h1>", `href="https://rss.example.com/rss/feeds/claude-blog.atom"`, `href="https://rss.example.com/rss/feeds.opml"`} {
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), want) {
 			t.Errorf("index: %d, missing %s\n%s", w.Code, want, w.Body)
 		}

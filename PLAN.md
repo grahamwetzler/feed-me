@@ -360,7 +360,7 @@ Other output details:
 ## 8. CLI and deployment
 
 ```
-feed-me run      [--config feed-me.yaml]   # long-running: scheduler + HTTP server
+feed-me run      [--config feed-me.yaml]  # long-running: scheduler + HTTP server
 feed-me build    [--site id]              # one-shot: fetch + write static feeds to out_dir, exit
 feed-me check    --site id [--url URL]    # dry-run extraction; prints fields + warnings as a table/JSON
 feed-me validate [--site id]              # render + validate feed(s)
