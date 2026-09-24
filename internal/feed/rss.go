@@ -27,6 +27,7 @@ type Channel struct {
 	Description string
 	Language    string
 	Image       string
+	Author      string // feed-level author, required by Atom
 	TTL         int
 	SelfURL     string    // public URL of this feed, for atom:link rel=self
 	LastBuild   time.Time // last content change, not last run (§5.7)

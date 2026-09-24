@@ -25,6 +25,19 @@ const root = "../.."
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
+// checkAtom renders the site's Atom feed, checks it and compares it with a golden file.
+func checkAtom(t *testing.T, ctx context.Context, st *store.Store, g *config.Global, site *config.Site, name string) {
+	t.Helper()
+	data, _, err := Render(ctx, st, g, site, "rss-er/test", Atom)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if probs := feed.CheckAtom(data); len(probs) > 0 {
+		t.Errorf("atom check: %v", probs)
+	}
+	golden(t, name, data)
+}
+
 // golden compares a rendered feed with testdata/<name>; -update rewrites it.
 func golden(t *testing.T, name string, got []byte) {
 	t.Helper()
@@ -118,7 +131,7 @@ func TestSelectDevBackfillAndSteadyState(t *testing.T) {
 		t.Fatalf("first run: %+v", st)
 	}
 
-	data, n, err := RenderRSS(ctx, r.Store, g, site, "rss-er/test")
+	data, n, err := Render(ctx, r.Store, g, site, "rss-er/test", RSS)
 	if err != nil || n != 4 {
 		t.Fatalf("render: n=%d err=%v", n, err)
 	}
@@ -126,6 +139,7 @@ func TestSelectDevBackfillAndSteadyState(t *testing.T) {
 		t.Errorf("check: %v", probs)
 	}
 	golden(t, "select-dev/feed.golden.xml", data)
+	checkAtom(t, ctx, r.Store, g, site, "select-dev/feed.golden.atom")
 	s := string(data)
 	for _, want := range []string{
 		"<title>Databricks Liquid Clustering Simplified</title>",
@@ -238,7 +252,7 @@ func TestClaudeBlogTimestampsAndEdits(t *testing.T) {
 	}
 
 	// Rendered order: newest first, and the feed passes the local checks.
-	data, n, err := RenderRSS(ctx, r.Store, g, site, "rss-er/test")
+	data, n, err := Render(ctx, r.Store, g, site, "rss-er/test", RSS)
 	if err != nil || n != 4 {
 		t.Fatalf("render: %d %v", n, err)
 	}
@@ -246,6 +260,7 @@ func TestClaudeBlogTimestampsAndEdits(t *testing.T) {
 		t.Errorf("check: %v", probs)
 	}
 	golden(t, "claude-blog/feed.golden.xml", data)
+	checkAtom(t, ctx, r.Store, g, site, "claude-blog/feed.golden.atom")
 	s := string(data)
 	if a, b := strings.Index(s, "t-rowe-price"), strings.Index(s, "getting-started-with-loops"); a > b {
 		t.Error("items not newest first")

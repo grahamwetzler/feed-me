@@ -39,6 +39,9 @@ type W3CResult struct {
 var W3CAllowedWarnings = map[string]string{
 	// The feed is posted as raw data, so there is no location for the self link to match.
 	"SelfDoesntMatchLocation": "validated from raw data, not its public URL",
+	// Atom only. Sites give date-only modification dates, so posts edited on
+	// the same day share an atom:updated value; the validator calls this benign.
+	"DuplicateUpdated": "date-only modified dates coincide",
 }
 
 // Unexpected returns the errors plus any warning not in W3CAllowedWarnings.

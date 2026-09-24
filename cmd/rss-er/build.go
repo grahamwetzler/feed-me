@@ -2,17 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"rss-er/internal/config"
-	"rss-er/internal/feed"
 	"rss-er/internal/fetch"
 	"rss-er/internal/pipeline"
 	"rss-er/internal/store"
@@ -85,35 +86,35 @@ func cmdBuild(args []string, stdout, stderr io.Writer) int {
 			failed = failed || st.Errors > 0
 		}
 
-		data, n, err := pipeline.RenderRSS(ctx, e.store, &e.cfg.Global, site, generator())
-		if err != nil {
-			log.Error("render failed", "err", err)
-			failed = true
-			continue
-		}
-		path := filepath.Join(e.cfg.Global.OutDir, filepath.FromSlash(pipeline.FeedPath(site.ID)))
-		if n == 0 {
-			// Never publish an empty feed; leave any previous file in place (§8).
-			log.Warn("no items stored; feed not written", "path", path)
-			failed = true
-			continue
-		}
-		if probs := feed.Check(data); len(probs) > 0 {
-			for _, p := range probs {
-				log.Error("rendered feed failed a check", "problem", p)
+		for _, f := range pipeline.Formats {
+			path := filepath.Join(e.cfg.Global.OutDir, filepath.FromSlash(pipeline.FeedPath(site.ID, f)))
+			n, err := writeFeed(ctx, e, site, f, path)
+			if err != nil {
+				log.Error("feed not written", "path", path, "err", err)
+				failed = true
+				continue
 			}
-			failed = true
-			continue
+			fmt.Fprintf(stdout, "%s: %d items → %s\n", site.ID, n, path)
 		}
-		if err := pipeline.WriteFileAtomic(path, data); err != nil {
-			log.Error("writing feed", "err", err)
-			failed = true
-			continue
-		}
-		fmt.Fprintf(stdout, "%s: %d items → %s\n", site.ID, n, path)
 	}
 	if failed {
 		return 1
 	}
 	return 0
+}
+
+// writeFeed renders a site's feed, checks it and writes it atomically. It
+// never writes an empty feed, leaving any previous file in place (§8).
+func writeFeed(ctx context.Context, e *env, site *config.Site, f pipeline.Format, path string) (int, error) {
+	data, n, err := pipeline.Render(ctx, e.store, &e.cfg.Global, site, generator(), f)
+	if err != nil {
+		return 0, fmt.Errorf("render: %w", err)
+	}
+	if n == 0 {
+		return 0, errors.New("no items stored")
+	}
+	if probs := f.Check(data); len(probs) > 0 {
+		return 0, fmt.Errorf("rendered feed failed its checks: %s", strings.Join(probs, "; "))
+	}
+	return n, pipeline.WriteFileAtomic(path, data)
 }

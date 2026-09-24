@@ -32,50 +32,54 @@ func cmdValidate(args []string, stdout, stderr io.Writer) int {
 	}
 	defer e.store.Close()
 
-	failed := false
-	for i, site := range e.sites {
-		data, n, err := pipeline.RenderRSS(ctx, e.store, &e.cfg.Global, site, generator())
-		if err != nil {
-			fmt.Fprintf(stderr, "%s: %v\n", site.ID, err)
-			failed = true
-			continue
-		}
-		if n == 0 {
-			fmt.Fprintf(stderr, "%s: no stored items; run rss-er build first\n", site.ID)
-			failed = true
-			continue
-		}
-		probs := feed.Check(data)
-		for _, p := range probs {
-			fmt.Fprintf(stdout, "%s: %s\n", site.ID, p)
-		}
-		failed = failed || len(probs) > 0
-		fmt.Fprintf(stdout, "%s: local checks: %d items, %d bytes, %d problem(s)\n", site.ID, n, len(data), len(probs))
-
-		if !*w3c {
-			continue
-		}
-		if i > 0 {
-			time.Sleep(2 * time.Second) // be polite to the shared validator
-		}
-		res, err := feed.ValidateW3C(ctx, &http.Client{Timeout: 2 * time.Minute}, fetch.UserAgent(version, e.cfg.Global.ContactURL), data)
-		if err != nil {
-			fmt.Fprintf(stderr, "%s: %v\n", site.ID, err)
-			failed = true
-			continue
-		}
-		for _, w := range res.Warnings {
-			if why, ok := feed.W3CAllowedWarnings[w.Type]; ok {
-				fmt.Fprintf(stdout, "%s: W3C (allowed: %s) %s\n", site.ID, why, w)
+	failed, posted := false, false
+	for _, site := range e.sites {
+		for _, f := range pipeline.Formats {
+			name := site.ID + f.Ext
+			data, n, err := pipeline.Render(ctx, e.store, &e.cfg.Global, site, generator(), f)
+			if err != nil {
+				fmt.Fprintf(stderr, "%s: %v\n", name, err)
+				failed = true
+				continue
 			}
+			if n == 0 {
+				fmt.Fprintf(stderr, "%s: no stored items; run rss-er build first\n", name)
+				failed = true
+				continue
+			}
+			probs := f.Check(data)
+			for _, p := range probs {
+				fmt.Fprintf(stdout, "%s: %s\n", name, p)
+			}
+			failed = failed || len(probs) > 0
+			fmt.Fprintf(stdout, "%s: local checks: %d items, %d bytes, %d problem(s)\n", name, n, len(data), len(probs))
+
+			if !*w3c {
+				continue
+			}
+			if posted {
+				time.Sleep(2 * time.Second) // be polite to the shared validator
+			}
+			posted = true
+			res, err := feed.ValidateW3C(ctx, &http.Client{Timeout: 2 * time.Minute}, fetch.UserAgent(version, e.cfg.Global.ContactURL), data)
+			if err != nil {
+				fmt.Fprintf(stderr, "%s: %v\n", name, err)
+				failed = true
+				continue
+			}
+			for _, w := range res.Warnings {
+				if why, ok := feed.W3CAllowedWarnings[w.Type]; ok {
+					fmt.Fprintf(stdout, "%s: W3C (allowed: %s) %s\n", name, why, w)
+				}
+			}
+			bad := res.Unexpected()
+			for _, m := range bad {
+				fmt.Fprintf(stdout, "%s: W3C %s\n", name, m)
+			}
+			fmt.Fprintf(stdout, "%s: W3C: valid=%v, %d error(s), %d warning(s), %d unexpected\n",
+				name, res.Valid, len(res.Errors), len(res.Warnings), len(bad))
+			failed = failed || len(bad) > 0
 		}
-		bad := res.Unexpected()
-		for _, m := range bad {
-			fmt.Fprintf(stdout, "%s: W3C %s\n", site.ID, m)
-		}
-		fmt.Fprintf(stdout, "%s: W3C: valid=%v, %d error(s), %d warning(s), %d unexpected\n",
-			site.ID, res.Valid, len(res.Errors), len(res.Warnings), len(bad))
-		failed = failed || len(bad) > 0
 	}
 	if failed {
 		return 1

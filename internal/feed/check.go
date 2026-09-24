@@ -14,43 +14,11 @@ import (
 // well-formed XML, required elements, RFC 822 dates, unique GUIDs, absolute
 // links, and items sorted newest first. It returns one message per problem.
 func Check(data []byte) []string {
-	var probs []string
-	add := func(format string, args ...any) { probs = append(probs, fmt.Sprintf(format, args...)) }
-
-	// Well-formedness, independent of the structs below. The decoder accepts
-	// fragments, so also require exactly one root element and nothing but
-	// whitespace, comments and processing instructions outside it.
-	// A UTF-8 byte-order mark may precede the document; anywhere else it is text.
-	dec := xml.NewDecoder(bytes.NewReader(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))))
-	depth, roots := 0, 0
-	for {
-		tok, err := dec.Token()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			add("not well-formed XML: %v", err)
-			return probs
-		}
-		switch t := tok.(type) {
-		case xml.StartElement:
-			if depth == 0 {
-				roots++
-			}
-			depth++
-		case xml.EndElement:
-			depth--
-		case xml.CharData:
-			if depth == 0 && len(bytes.TrimSpace(t)) > 0 {
-				add("not well-formed XML: text outside the root element")
-				return probs
-			}
-		}
-	}
-	if roots != 1 {
-		add("not well-formed XML: %d root elements, want 1", roots)
+	probs := wellFormed(data)
+	if len(probs) > 0 {
 		return probs
 	}
+	add := func(format string, args ...any) { probs = append(probs, fmt.Sprintf(format, args...)) }
 
 	var doc struct {
 		XMLName xml.Name `xml:"rss"`
@@ -105,8 +73,7 @@ func Check(data []byte) []string {
 		}
 	}
 	checkURL := func(where, u string) {
-		p, err := url.Parse(u)
-		if err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "" {
+		if !absURL(u) {
 			add("%s: %q is not an absolute http(s) URL", where, u)
 		}
 	}
@@ -163,4 +130,45 @@ func Check(data []byte) []string {
 		}
 	}
 	return probs
+}
+
+// wellFormed checks well-formedness, independent of any feed format. The
+// decoder accepts fragments, so it also requires exactly one root element and
+// nothing but whitespace, comments and processing instructions outside it. A
+// UTF-8 byte-order mark may precede the document; anywhere else it is text.
+func wellFormed(data []byte) []string {
+	dec := xml.NewDecoder(bytes.NewReader(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))))
+	depth, roots := 0, 0
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return []string{fmt.Sprintf("not well-formed XML: %v", err)}
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if depth == 0 {
+				roots++
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		case xml.CharData:
+			if depth == 0 && len(bytes.TrimSpace(t)) > 0 {
+				return []string{"not well-formed XML: text outside the root element"}
+			}
+		}
+	}
+	if roots != 1 {
+		return []string{fmt.Sprintf("not well-formed XML: %d root elements, want 1", roots)}
+	}
+	return nil
+}
+
+// absURL reports whether u is an absolute http(s) URL.
+func absURL(u string) bool {
+	p, err := url.Parse(u)
+	return err == nil && (p.Scheme == "http" || p.Scheme == "https") && p.Host != ""
 }

@@ -11,12 +11,26 @@ import (
 	"rss-er/internal/store"
 )
 
-// FeedPath is a site's RSS path below base_path.
-func FeedPath(siteID string) string { return "feeds/" + siteID + ".xml" }
+// Format is a feed format rss-er serves: RSS 2.0 (§7.1) or Atom 1.0 (§7.2).
+type Format struct {
+	Ext         string // file extension, with the dot
+	ContentType string
+	Render      func(feed.Channel, []feed.Item) ([]byte, error)
+	Check       func([]byte) []string
+}
 
-// RenderRSS renders the site's newest max_items stored items. It returns the
-// number of items rendered.
-func RenderRSS(ctx context.Context, st *store.Store, g *config.Global, site *config.Site, generator string) ([]byte, int, error) {
+var (
+	RSS     = Format{".xml", "application/rss+xml; charset=utf-8", feed.RSS, feed.Check}
+	Atom    = Format{".atom", "application/atom+xml; charset=utf-8", feed.Atom, feed.CheckAtom}
+	Formats = []Format{RSS, Atom}
+)
+
+// FeedPath is a site's feed path below base_path.
+func FeedPath(siteID string, f Format) string { return "feeds/" + siteID + f.Ext }
+
+// Render renders the site's newest max_items stored items in format f. It
+// returns the number of items rendered.
+func Render(ctx context.Context, st *store.Store, g *config.Global, site *config.Site, generator string, f Format) ([]byte, int, error) {
 	items, err := st.Recent(ctx, site.ID, site.Schedule.MaxItems)
 	if err != nil {
 		return nil, 0, err
@@ -31,8 +45,9 @@ func RenderRSS(ctx context.Context, st *store.Store, g *config.Global, site *con
 		Description: site.Channel.Description,
 		Language:    site.Channel.Language,
 		Image:       site.Channel.Image,
+		Author:      site.Channel.Author,
 		TTL:         site.Channel.TTL,
-		SelfURL:     g.PublicBaseURL + g.BasePath + FeedPath(site.ID),
+		SelfURL:     g.PublicBaseURL + g.BasePath + FeedPath(site.ID, f),
 		LastBuild:   state.LastChange,
 		Generator:   generator,
 	}
@@ -57,7 +72,7 @@ func RenderRSS(ctx context.Context, st *store.Store, g *config.Global, site *con
 			Enclosure:   site.Item.Enclosure,
 		}
 	}
-	data, err := feed.RSS(ch, out)
+	data, err := f.Render(ch, out)
 	return data, len(items), err
 }
 
