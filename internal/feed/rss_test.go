@@ -94,3 +94,58 @@ func TestCheckFindsProblems(t *testing.T) {
 		t.Errorf("malformed: %v", p)
 	}
 }
+
+func TestDescriptionIsHTMLEscapedText(t *testing.T) {
+	ch, items := sample()
+	items[0].Description = "Use <example> & &amp; literally"
+	out, err := RSS(ch, items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Items []struct {
+			Description string `xml:"description"`
+		} `xml:"channel>item"`
+	}
+	if err := xml.Unmarshal(out, &doc); err != nil {
+		t.Fatal(err)
+	}
+	// After XML decoding, a reader parsing the description as HTML must see text.
+	if got, want := doc.Items[0].Description, "Use &lt;example&gt; &amp; &amp;amp; literally"; got != want {
+		t.Errorf("decoded description = %q, want %q", got, want)
+	}
+}
+
+func TestClean(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain":      "plain",
+		"a�b":        "a�b", // a real replacement character stays
+		"a�b\x01":    "a�b",
+		"a\xffb�c":   "ab�c", // malformed byte dropped, real U+FFFD kept
+		"x￾y\tz\r\n": "xy\tz\r\n",
+	} {
+		if got := clean(in); got != want {
+			t.Errorf("clean(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCheckRejectsFragments(t *testing.T) {
+	ch, items := sample()
+	out, err := RSS(ch, items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := Check(out); len(p) != 0 {
+		t.Fatalf("valid feed: %q", p)
+	}
+	for name, extra := range map[string]string{"second root": "<extra/>", "trailing text": "junk"} {
+		p := Check(append(append([]byte{}, out...), extra...))
+		if len(p) == 0 || !strings.Contains(p[0], "not well-formed") {
+			t.Errorf("%s: problems = %q", name, p)
+		}
+	}
+	if p := Check(append(append([]byte{}, out...), "\n<!-- note -->\n"...)); len(p) != 0 {
+		t.Errorf("trailing comment should pass: %q", p)
+	}
+}

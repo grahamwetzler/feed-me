@@ -3,7 +3,9 @@ package feed
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"time"
 )
@@ -15,17 +17,38 @@ func Check(data []byte) []string {
 	var probs []string
 	add := func(format string, args ...any) { probs = append(probs, fmt.Sprintf(format, args...)) }
 
-	// Well-formedness, independent of the structs below.
+	// Well-formedness, independent of the structs below. The decoder accepts
+	// fragments, so also require exactly one root element and nothing but
+	// whitespace, comments and processing instructions outside it.
 	dec := xml.NewDecoder(bytes.NewReader(data))
+	depth, roots := 0, 0
 	for {
-		_, err := dec.Token()
-		if err != nil {
-			if err.Error() != "EOF" {
-				add("not well-formed XML: %v", err)
-				return probs
-			}
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
 			break
 		}
+		if err != nil {
+			add("not well-formed XML: %v", err)
+			return probs
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if depth == 0 {
+				roots++
+			}
+			depth++
+		case xml.EndElement:
+			depth--
+		case xml.CharData:
+			if depth == 0 && len(bytes.TrimSpace(t)) > 0 {
+				add("not well-formed XML: text outside the root element")
+				return probs
+			}
+		}
+	}
+	if roots != 1 {
+		add("not well-formed XML: %d root elements, want 1", roots)
+		return probs
 	}
 
 	var doc struct {

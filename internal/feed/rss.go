@@ -149,7 +149,7 @@ func RSS(ch Channel, items []Item) ([]byte, error) {
 		ri := rssItem{
 			Title:       clean(it.Title),
 			Link:        it.Link,
-			Description: clean(it.Description),
+			Description: htmlText.Replace(clean(it.Description)),
 			Content:     cdata{clean(it.ContentHTML)},
 			Creator:     clean(it.Author),
 			PubDate:     RSSDate(it.Published),
@@ -186,6 +186,10 @@ func RSS(ch Channel, items []Item) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// htmlText escapes plain text for an element that readers decode as HTML
+// (RSS <description>), so literal text such as "<div>" isn't read as markup.
+var htmlText = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+
 func imageType(u string) string {
 	if i := strings.IndexAny(u, "?#"); i >= 0 {
 		u = u[:i]
@@ -200,20 +204,25 @@ func imageType(u string) string {
 // other than tab, newline and carriage return, surrogates, U+FFFE/U+FFFF and
 // invalid UTF-8.
 func clean(s string) string {
-	valid := func(r rune) bool {
+	valid := func(r rune, width int) bool {
+		// Malformed UTF-8 decodes as RuneError with width 1; a real U+FFFD is
+		// three bytes wide and is kept.
 		return r == '\t' || r == '\n' || r == '\r' ||
-			(r >= 0x20 && r <= 0xD7FF) || (r >= 0xE000 && r <= 0xFFFD) || (r >= 0x10000 && r <= 0x10FFFF)
+			(r >= 0x20 && r <= 0xD7FF) || (r >= 0xE000 && r <= 0xFFFD && width > 1) || (r >= 0x10000 && r <= 0x10FFFF)
 	}
-	ok := utf8.ValidString(s)
-	for _, r := range s {
-		if !ok || !valid(r) {
-			return strings.Map(func(r rune) rune {
-				if r == utf8.RuneError || !valid(r) {
-					return -1
-				}
-				return r
-			}, s)
+	var b strings.Builder
+	start := 0 // s[start:i] is valid and not yet copied
+	for i := 0; i < len(s); {
+		r, w := utf8.DecodeRuneInString(s[i:])
+		if !valid(r, w) {
+			b.WriteString(s[start:i])
+			start = i + w
 		}
+		i += w
 	}
-	return s
+	if start == 0 {
+		return s
+	}
+	b.WriteString(s[start:])
+	return b.String()
 }
