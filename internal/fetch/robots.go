@@ -60,7 +60,9 @@ func (r *robotsCache) get(ctx context.Context, u *url.URL, o Options) (*robotstx
 		return e.data, nil
 	}
 
-	// Fetch through the rate limiter, but never re-check robots for robots.txt itself.
+	// Fetch through the rate limiter, but never check robots for robots.txt
+	// itself, including where it redirects: that would recurse into this lookup.
+	o.RespectRobots = false
 	resp, err := r.c.do(ctx, Request{URL: key + "/robots.txt"}, o)
 	status, body := 200, []byte(nil)
 	var se *StatusError

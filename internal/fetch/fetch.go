@@ -197,7 +197,9 @@ func retryable(err error) bool {
 		return se.Status == http.StatusTooManyRequests || se.Status >= 500
 	}
 	var tb *tooBigError
-	return !errors.As(err, &tb) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
+	var re *redirectError
+	return !errors.As(err, &tb) && !errors.As(err, &re) && !errors.Is(err, ErrDisallowed) &&
+		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }
 
 type tooBigError struct {
@@ -231,7 +233,7 @@ func (c *Client) once(ctx context.Context, req Request, o Options) (*Response, t
 		hr.Header.Set("If-Modified-Since", req.LastModified)
 	}
 
-	resp, err := c.HTTP.Do(hr)
+	resp, err := c.client(o).Do(hr)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -274,6 +276,45 @@ func (c *Client) once(ctx context.Context, req Request, o Options) (*Response, t
 	}
 	out.Body = body
 	return out, 0, nil
+}
+
+// maxRedirects matches net/http's default limit.
+const maxRedirects = 10
+
+// redirectError is a redirect we refuse to follow; retrying won't change it.
+type redirectError struct{ msg string }
+
+func (e *redirectError) Error() string { return e.msg }
+
+// client returns c.HTTP with a redirect policy that applies robots.txt and the
+// destination host's rate limit to every hop, not just the first request.
+func (c *Client) client(o Options) *http.Client {
+	hc := *c.HTTP
+	prev := c.HTTP.CheckRedirect
+	hc.CheckRedirect = func(r *http.Request, via []*http.Request) error {
+		if prev != nil {
+			if err := prev(r, via); err != nil {
+				return err
+			}
+		}
+		if len(via) >= maxRedirects {
+			return &redirectError{fmt.Sprintf("stopped after %d redirects", maxRedirects)}
+		}
+		if r.URL.Scheme != "http" && r.URL.Scheme != "https" {
+			return &redirectError{fmt.Sprintf("redirect to non-http(s) URL %s", r.URL)}
+		}
+		if o.RespectRobots {
+			ok, err := c.robots.allowed(r.Context(), r.URL, o)
+			if err != nil {
+				return fmt.Errorf("robots.txt for %s: %w", r.URL.Host, err)
+			}
+			if !ok {
+				return fmt.Errorf("redirect to %s: %w", r.URL, ErrDisallowed)
+			}
+		}
+		return c.limiter(r.URL.Host, o.Rate).Wait(r.Context())
+	}
+	return &hc
 }
 
 // parseRetryAfter reads delay-seconds or an HTTP date.

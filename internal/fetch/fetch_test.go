@@ -178,6 +178,55 @@ func TestRobots5xxDisallows(t *testing.T) {
 	}
 }
 
+func TestRedirectsAreCheckedAgainstRobots(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/robots.txt":
+			http.Redirect(w, r, "/robots-real.txt", http.StatusMovedPermanently) // must not recurse
+		case "/robots-real.txt":
+			_, _ = w.Write([]byte("User-agent: *\nDisallow: /private/\n"))
+		case "/public":
+			http.Redirect(w, r, "/private/x", http.StatusFound)
+		default:
+			hits.Add(1)
+			_, _ = w.Write([]byte("secret"))
+		}
+	}))
+	defer srv.Close()
+	_, err := newTestClient(srv).Site(fast).Fetch(context.Background(), Request{URL: srv.URL + "/public"})
+	if !errors.Is(err, ErrDisallowed) {
+		t.Errorf("err = %v, want ErrDisallowed", err)
+	}
+	if n := hits.Load(); n != 0 {
+		t.Errorf("disallowed redirect target fetched %d times", n)
+	}
+}
+
+func TestRedirectsWaitForDestinationHost(t *testing.T) {
+	dst := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) }))
+	defer dst.Close()
+	src := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, dst.URL+"/a", http.StatusFound)
+	}))
+	defer src.Close()
+
+	o := fast
+	o.RespectRobots = false
+	o.Rate = 5 // one request per 200ms per host
+	c := newTestClient(src)
+	dstHost := strings.TrimPrefix(dst.URL, "http://")
+	c.limiter(dstHost, o.Rate).Allow() // the destination's token is already spent
+
+	start := time.Now()
+	if _, err := c.Site(o).Fetch(context.Background(), Request{URL: src.URL + "/r"}); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d < 150*time.Millisecond {
+		t.Errorf("redirect to a rate-limited host took %v; want it to wait for a token", d)
+	}
+}
+
 func TestRateLimitIsPerHostAndSlowestWins(t *testing.T) {
 	c := NewClient(nil, "ua", 0, nil)
 	l := c.limiter("a.example", 10)
