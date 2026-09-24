@@ -3,9 +3,11 @@ package fetch
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -224,6 +226,54 @@ func TestRedirectsWaitForDestinationHost(t *testing.T) {
 	}
 	if d := time.Since(start); d < 150*time.Millisecond {
 		t.Errorf("redirect to a rate-limited host took %v; want it to wait for a token", d)
+	}
+}
+
+func TestRedirectToAnotherDomainDropsCredentials(t *testing.T) {
+	type seen struct{ host, path, auth, cookie, extra string }
+	var mu sync.Mutex
+	var reqs []seen
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		reqs = append(reqs, seen{r.Host, r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("Cookie"), r.Header.Get("X-Extra")})
+		mu.Unlock()
+		switch {
+		case r.URL.Path == "/robots.txt":
+			http.NotFound(w, r)
+		case strings.HasPrefix(r.Host, "src.test"):
+			http.Redirect(w, r, "http://dst.test/a", http.StatusFound)
+		default:
+			_, _ = w.Write([]byte("ok"))
+		}
+	}))
+	defer srv.Close()
+	// Every hostname dials the one test server, so the redirect really
+	// crosses domains as far as net/http is concerned.
+	addr := srv.Listener.Addr().String()
+	hc := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, addr)
+	}}}
+	c := NewClient(hc, "ua", 1<<10, nil)
+	o := fast
+	o.Headers = map[string]string{"Authorization": "Bearer secret", "Cookie": "s=1", "X-Extra": "yes"}
+	if _, err := c.Site(o).Fetch(context.Background(), Request{URL: "http://src.test/r"}); err != nil {
+		t.Fatal(err)
+	}
+	var dstRobots bool
+	for _, r := range reqs {
+		if !strings.HasPrefix(r.host, "dst.test") {
+			continue
+		}
+		dstRobots = dstRobots || r.path == "/robots.txt"
+		if r.auth != "" || r.cookie != "" {
+			t.Errorf("%s%s received credentials: %+v", r.host, r.path, r)
+		}
+		if r.extra != "yes" {
+			t.Errorf("%s%s lost the non-sensitive header: %+v", r.host, r.path, r)
+		}
+	}
+	if !dstRobots {
+		t.Errorf("destination robots.txt never checked: %+v", reqs)
 	}
 }
 

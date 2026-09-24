@@ -304,7 +304,17 @@ func (c *Client) client(o Options) *http.Client {
 			return &redirectError{fmt.Sprintf("redirect to non-http(s) URL %s", r.URL)}
 		}
 		if o.RespectRobots {
-			ok, err := c.robots.allowed(r.Context(), r.URL, o)
+			// net/http has already dropped Authorization, Cookie and the like
+			// from r if the redirect leaves the original domain; the robots.txt
+			// lookup must not send them there either.
+			ro := o
+			ro.Headers = map[string]string{}
+			for k, v := range o.Headers {
+				if r.Header.Get(k) != "" {
+					ro.Headers[k] = v
+				}
+			}
+			ok, err := c.robots.allowed(r.Context(), r.URL, ro)
 			if err != nil {
 				return fmt.Errorf("robots.txt for %s: %w", r.URL.Host, err)
 			}
