@@ -248,14 +248,34 @@ var index = template.Must(template.New("index").Parse(`<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Feed Me!</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem}li{margin:.5rem 0}</style>
+<meta name="color-scheme" content="dark">
+<style>
+:root{--bg:#111316;--fg:#e4e6ea;--muted:#8b919a;--line:#262a30;--accent:#f0a24b;--chip:#1c1f24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:40rem;margin:0 auto;padding:4rem 1.25rem}
+h1{margin:0 0 2rem;font-size:1.75rem;font-weight:650;letter-spacing:-.02em}
+a{color:inherit;text-decoration:none}
+ul{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+li{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.9rem 0;border-bottom:1px solid var(--line)}
+li>a{font-weight:500}
+li>a:hover{color:var(--accent)}
+.fmt{display:flex;gap:.4rem;flex-shrink:0}
+.fmt a{font-size:.75rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:.15rem .6rem}
+.fmt a:hover{color:var(--accent);border-color:var(--accent)}
+p{margin:2rem 0 0;color:var(--muted);font-size:.9rem}
+p a{color:var(--accent)}
+p a:hover{text-decoration:underline}
+</style>
+<main>
 <h1>Feed Me! feeds</h1>
 <ul>
 {{- range .Sites}}
-<li><a href="{{.Link}}">{{.Title}}</a>: <a href="{{.RSS}}">RSS</a> · <a href="{{.Atom}}">Atom</a></li>
+<li><a href="{{.Link}}">{{.Title}}</a><span class="fmt"><a href="{{.RSS}}">RSS</a><a href="{{.Atom}}">Atom</a></span></li>
 {{- end}}
 </ul>
 <p><a href="{{.OPML}}">OPML</a> for importing every feed at once.</p>
+</main>
 `))
 
 func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
