@@ -3,6 +3,7 @@ package feed
 import (
 	"bytes"
 	"encoding/xml"
+	"strings"
 	"time"
 )
 
@@ -93,7 +94,7 @@ func Atom(ch Channel, items []Item) ([]byte, error) {
 	for _, it := range items {
 		e := atomEntry{
 			ID:        AtomID(it),
-			Title:     atomText{Type: "text", Text: clean(it.Title)},
+			Title:     atomText{Type: "text", Text: entryTitle(it)},
 			Link:      atomLinkEl{Rel: "alternate", Type: "text/html", Href: it.Link},
 			Published: AtomDate(it.Published),
 			Content:   atomText{Type: "html", Text: clean(it.ContentHTML)},
@@ -134,4 +135,19 @@ func Atom(ch Channel, items []Item) ([]byte, error) {
 	}
 	buf.WriteByte('\n')
 	return buf.Bytes(), nil
+}
+
+// entryTitle is the item's title or, since Atom requires one where RSS
+// accepts a description alone, the start of its description or its link.
+func entryTitle(it Item) string {
+	if t := strings.TrimSpace(clean(it.Title)); t != "" {
+		return t
+	}
+	if d := strings.Join(strings.Fields(clean(it.Description)), " "); d != "" {
+		if r := []rune(d); len(r) > 80 {
+			return strings.TrimSpace(string(r[:79])) + "…"
+		}
+		return d
+	}
+	return it.Link
 }

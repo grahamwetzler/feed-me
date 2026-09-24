@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	rssfeed "rss-er/internal/feed"
 )
 
 func TestCheckRejectsBadLimit(t *testing.T) {
@@ -50,6 +52,16 @@ func TestBuildWritesFeedButFailsOnItemErrors(t *testing.T) {
 	}
 	if n := strings.Count(string(feed), "<item>"); n != 6 {
 		t.Errorf("feed has %d items, want the 6 saved posts", n)
+	}
+	atom, err := os.ReadFile(filepath.Join(dir, "out", "feeds", "claude-blog.atom"))
+	if err != nil {
+		t.Fatalf("atom feed not written: %v", err)
+	}
+	if n := strings.Count(string(atom), "<entry>"); n != 6 {
+		t.Errorf("atom feed has %d entries, want 6", n)
+	}
+	if p := rssfeed.CheckAtom(atom); len(p) > 0 {
+		t.Errorf("atom feed: %v", p)
 	}
 }
 

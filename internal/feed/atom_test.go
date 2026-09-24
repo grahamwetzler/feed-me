@@ -87,3 +87,24 @@ func TestCheckAtomFindsProblems(t *testing.T) {
 		t.Errorf("RSS passed as Atom: %v", p)
 	}
 }
+
+func TestUntitledItemsPassBothChecks(t *testing.T) {
+	ch, items := atomSample()
+	items[0].Title = ""
+	items[0].Description = strings.Repeat("word ", 30)
+	// RSS accepts an item with a description but no title; Atom must not be stricter.
+	rss, _ := RSS(ch, items)
+	atom, _ := Atom(ch, items)
+	if p := Check(rss); len(p) > 0 {
+		t.Errorf("RSS check: %v", p)
+	}
+	if p := CheckAtom(atom); len(p) > 0 {
+		t.Errorf("Atom check: %v", p)
+	}
+	if want := `<title type="text">` + strings.TrimSpace(strings.Repeat("word ", 16)) + `…</title>`; !strings.Contains(string(atom), want) {
+		t.Errorf("missing %s\n%s", want, atom)
+	}
+	if got := entryTitle(Item{Title: " ", Link: "https://x.example/a"}); got != "https://x.example/a" {
+		t.Errorf("no title or description: %q", got)
+	}
+}
