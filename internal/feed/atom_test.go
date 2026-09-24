@@ -93,8 +93,14 @@ func TestUntitledItemsPassBothChecks(t *testing.T) {
 	items[0].Title = ""
 	items[0].Description = strings.Repeat("word ", 30)
 	// RSS accepts an item with a description but no title; Atom must not be stricter.
-	rss, _ := RSS(ch, items)
-	atom, _ := Atom(ch, items)
+	rss, err := RSS(ch, items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	atom, err := Atom(ch, items)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if p := Check(rss); len(p) > 0 {
 		t.Errorf("RSS check: %v", p)
 	}
@@ -103,6 +109,15 @@ func TestUntitledItemsPassBothChecks(t *testing.T) {
 	}
 	if want := `<title type="text">` + strings.TrimSpace(strings.Repeat("word ", 16)) + `…</title>`; !strings.Contains(string(atom), want) {
 		t.Errorf("missing %s\n%s", want, atom)
+	}
+	for desc, want := range map[string]string{
+		strings.Repeat("abcdefgh ", 10): strings.TrimSpace(strings.Repeat("abcdefgh ", 8)) + "…", // 80 runes end mid-word
+		strings.Repeat("é", 100):        strings.Repeat("é", 79) + "…",                           // one long word
+		"  short \n description  ":      "short description",
+	} {
+		if got := entryTitle(Item{Description: desc}); got != want {
+			t.Errorf("title from %q: %q, want %q", desc, got, want)
+		}
 	}
 	if got := entryTitle(Item{Title: " ", Link: "https://x.example/a"}); got != "https://x.example/a" {
 		t.Errorf("no title or description: %q", got)
