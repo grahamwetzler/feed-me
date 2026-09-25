@@ -66,7 +66,12 @@ func Extract(site *config.Site, pageURL string, body []byte, hints map[string]st
 
 	r.Title = scalar("title", it.Title, false)
 	r.Summary = scalar("summary", it.Summary, false)
-	r.Author = scalar("author", it.Author, false)
+	// Every value of the winning source is an author: a JSON-LD author array,
+	// or a CSS selector matching repeated elements. A meta source gives only
+	// the first tag with its name.
+	if res := p.resolve(it.Author, false); len(res.values) > 0 {
+		r.Author, r.Sources["author"] = joinNames(dedupe(res.values)), res.source
+	}
 	r.Image = scalar("image", it.Image, true)
 	if res := p.resolve(it.Categories, false); len(res.values) > 0 {
 		r.Categories, r.Sources["categories"] = dedupe(res.values), res.source
@@ -164,6 +169,17 @@ func hostOf(raw string) string {
 		return ""
 	}
 	return strings.ToLower(u.Hostname())
+}
+
+// joinNames writes a list of names as prose: "A", "A and B", "A, B, and C".
+func joinNames(names []string) string {
+	switch len(names) {
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1]
 }
 
 func dedupe(vs []string) []string {

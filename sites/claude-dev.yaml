@@ -23,8 +23,7 @@ discovery:
 item:
   title:   [jsonld:BlogPosting.headline, meta:og:title]   # og:title carries a " / claude.dev Blog" suffix
   summary: [jsonld:BlogPosting.description, meta:description]
-  # The byline names every author; JSON-LD and the meta tags repeat per author,
-  # and a scalar source keeps only the first.
+  # The byline names every author in the site's own words ("..., and Issac G.").
   author:  ['css:#mAuthor', jsonld:BlogPosting.author]
   image:   [meta:og:image]
   categories: [jsonld:BlogPosting.articleSection]

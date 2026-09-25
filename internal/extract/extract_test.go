@@ -51,6 +51,26 @@ func TestJSONLDNestedObjectsResolveDeterministically(t *testing.T) {
 	}
 }
 
+func TestAuthorJoinsEveryValueOfTheWinningSource(t *testing.T) {
+	s := site(t, "  title: [css:h1]\n  author: [jsonld:BlogPosting.author, meta:author]\n  content: {selector: article}\n")
+	for authors, want := range map[string]string{
+		`{"name":"A"}`:                "A",
+		`[{"name":"A"},{"name":"B"}]`: "A and B",
+		`[{"name":"A"},{"name":"B"},{"name":"C"},{"name":"a"}]`: "A, B, and C",
+		`[]`: "M",
+	} {
+		page := []byte(`<meta name="author" content="M"><script type="application/ld+json">{"@type":"BlogPosting","author":` +
+			authors + `}</script><h1>T</h1><article>x</article>`)
+		r, err := Extract(s, "https://example.com/a", page, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Author != want {
+			t.Errorf("author %s: got %q, want %q", authors, r.Author, want)
+		}
+	}
+}
+
 func TestJSONLDDateFallsThroughToLaterObject(t *testing.T) {
 	s := site(t, "  title: [css:h1]\n  published: {sources: [jsonld:BlogPosting.datePublished]}\n  content: {selector: article}\n")
 	page := []byte(`<script type="application/ld+json">{"@type":"BlogPosting","datePublished":"soon"}</script>
