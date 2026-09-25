@@ -1,0 +1,140 @@
+[
+  {
+    "url": "https://www.snowflake.com/en/blog/kimi-k3-cortex-ai/",
+    "canonical": "https://www.snowflake.com/en/blog/kimi-k3-cortex-ai/",
+    "title": "Announcing Kimi K3 on Snowflake Cortex AI",
+    "summary": "Kimi K3 is in private preview on Snowflake Cortex AI. Explore Moonshot AI's open-weight model for coding, research, and enterprise applications.",
+    "author": "Ali Taha, Danmei Xu, and Arun Agarwal",
+    "image": "https://www.snowflake.com/content/dam/snowflake-site/blog/snowflake-corporate-/18-snowflake.png",
+    "categories": [
+      "AI \u0026 ML"
+    ],
+    "published": "2026-09-24T17:02:27Z",
+    "updated": "2026-09-24T18:40:39Z",
+    "content_blocks": 1,
+    "content_chars": 7874,
+    "content_elements": {
+      "h2": 5,
+      "h3": 4,
+      "p": 21,
+      "pre": 2,
+      "table": 1,
+      "ul": 3
+    },
+    "content_start": "Kimi K3, Moonshot AI's open-weight model, is now available in private preview o…",
+    "content_sha256": "c1a31fb731812ca0",
+    "sources": {
+      "author": "css:.snowflake-blog-author-chip .snowflake-blog-author-text-name",
+      "canonical": "css:link[rel=canonical]@href",
+      "categories": "jsonld:BlogPosting.about.name",
+      "content": "#snowflake-blog-template-main-container .snowflake-layout-container-inner-padding-small",
+      "image": "jsonld:BlogPosting.image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "css:.snowflake-blog-hero-title h1",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  },
+  {
+    "url": "https://www.snowflake.com/en/blog/snowpipe-streaming-elastic-channels-ga/",
+    "canonical": "https://www.snowflake.com/en/blog/snowpipe-streaming-elastic-channels-ga/",
+    "title": "Introducing a Simpler Path from Data Producers to Snowflake: Elastic Channels Support Up to 20 GB/s",
+    "summary": "Snowpipe Streaming Elastic Channels is now GA—stream data at up to 20 GB/s directly into Snowflake with durable acknowledgments and simplified pipelines.",
+    "author": "Chase Thomas",
+    "image": "https://www.snowflake.com/content/dam/snowflake-site/blog/2026/09/snowpipe-streaming-elastic-channels-ga/snowflake-elastic-channel-architecture-connecting-multiple.png",
+    "categories": [
+      "Data Engineering"
+    ],
+    "published": "2026-09-16T00:00:00-07:00",
+    "published_date_only": true,
+    "updated": "2026-09-16T00:00:00-07:00",
+    "content_blocks": 1,
+    "content_chars": 10285,
+    "content_elements": {
+      "h2": 6,
+      "img": 5,
+      "p": 28,
+      "pre": 1,
+      "ul": 4
+    },
+    "content_start": "Today, we're announcing the general availability of Elastic Channels for Snowpi…",
+    "content_sha256": "7669c5e499cb8531",
+    "sources": {
+      "author": "css:.snowflake-blog-author-chip .snowflake-blog-author-text-name",
+      "canonical": "css:link[rel=canonical]@href",
+      "categories": "jsonld:BlogPosting.about.name",
+      "content": "#snowflake-blog-template-main-container .snowflake-layout-container-inner-padding-small",
+      "image": "meta:og:image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "css:.snowflake-blog-hero-title h1",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  },
+  {
+    "url": "https://www.snowflake.com/en/blog/snowflake-integration-stackit-data-sovereignty/",
+    "canonical": "https://www.snowflake.com/en/blog/snowflake-integration-stackit-data-sovereignty/",
+    "title": "Data Sovereignty Demands More Than a Promise: Snowflake Integrates with STACKIT",
+    "summary": "The integration of Snowflake with STACKIT brings sovereign data and AI to Germany's regulated industries.",
+    "author": "Seth Youssef and Imran Shamim",
+    "image": "https://www.snowflake.com/content/dam/snowflake-site/engineering-blog/featured-images/sf-eng-blog-ML-0.png",
+    "published": "2026-09-17T00:00:00-07:00",
+    "published_date_only": true,
+    "content_blocks": 1,
+    "content_chars": 5192,
+    "content_elements": {
+      "h2": 1,
+      "h3": 1,
+      "img": 2,
+      "p": 11,
+      "ul": 1
+    },
+    "content_start": "Data sovereignty is no longer just a baseline regulatory consideration. Across …",
+    "content_sha256": "23357e9368ee2f05",
+    "sources": {
+      "author": "css:.snowflake-blog-author-chip .snowflake-blog-author-text-name",
+      "canonical": "css:link[rel=canonical]@href",
+      "content": "#snowflake-blog-template-main-container .snowflake-layout-container-inner-padding-small",
+      "image": "meta:og:image",
+      "published": "css:.snowflake-blog-hero-publication-information .snowflake-blog-card-publication-information-date",
+      "summary": "meta:description",
+      "title": "css:.snowflake-blog-hero-title h1"
+    }
+  },
+  {
+    "url": "https://www.snowflake.com/en/blog/engineering/workload-performance-analysis-coco/",
+    "canonical": "https://www.snowflake.com/en/blog/engineering/workload-performance-analysis-coco/",
+    "title": "Stop Guessing, Start Optimizing: Workload Performance Analysis with CoCo",
+    "summary": "Analyze Snowflake query performance in natural language with CoCo. Identify spilling, pruning issues, and cache efficiency to optimize workloads fast.",
+    "author": "Vignesh Siva",
+    "image": "https://www.snowflake.com/content/dam/snowflake-site/engineering-blog/featured-images/sf-eng-blog-ML-3.png",
+    "categories": [
+      "Core Platform"
+    ],
+    "published": "2026-09-23T19:23:48Z",
+    "updated": "2026-09-23T23:24:47Z",
+    "content_blocks": 1,
+    "content_chars": 6143,
+    "content_elements": {
+      "h2": 5,
+      "img": 1,
+      "ol": 1,
+      "p": 16,
+      "table": 1,
+      "ul": 3
+    },
+    "content_start": "TL;DR: Workload Performance Analysis is a natural-language skill in CoCo that a…",
+    "content_sha256": "f3adcbdb198ae601",
+    "sources": {
+      "author": "css:.snowflake-blog-author-chip .snowflake-blog-author-text-name",
+      "canonical": "css:link[rel=canonical]@href",
+      "categories": "jsonld:BlogPosting.about.name",
+      "content": "#snowflake-blog-template-main-container .snowflake-layout-container-inner-padding-small",
+      "image": "jsonld:BlogPosting.image",
+      "published": "jsonld:BlogPosting.datePublished",
+      "summary": "jsonld:BlogPosting.description",
+      "title": "css:.snowflake-blog-hero-title h1",
+      "updated": "jsonld:BlogPosting.dateModified"
+    }
+  }
+]

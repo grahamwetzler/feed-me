@@ -32,10 +32,20 @@ func fixtures(t *testing.T) *fetchtest.Transport {
 		"https://select.dev/robots.txt":    root + "/testdata/select-dev/robots.txt",
 		"https://claude.dev/sitemap.xml":   root + "/testdata/claude-dev/sitemap.xml",
 		"https://claude.dev/robots.txt":    root + "/testdata/claude-dev/robots.txt",
+
+		"https://www.snowflake.com/en/blog/":             root + "/testdata/snowflake-blog/index.html",
+		"https://www.snowflake.com/en/blog/engineering/": root + "/testdata/snowflake-blog/engineering.html",
+		"https://www.snowflake.com/robots.txt":           root + "/testdata/snowflake-blog/robots.txt",
 	}
-	// claude.dev post URLs end in a slash.
-	for site, url := range map[string]string{"claude-blog": "https://claude.com/blog/%s", "select-dev": "https://select.dev/posts/%s", "claude-dev": "https://claude.dev/blog/%s/"} {
-		posts, _ := filepath.Glob(filepath.Join(root, "testdata", site, "posts", "*.html"))
+	// claude.dev and Snowflake post URLs end in a slash.
+	for dir, url := range map[string]string{
+		"claude-blog": "https://claude.com/blog/%s", "select-dev": "https://select.dev/posts/%s", "claude-dev": "https://claude.dev/blog/%s/",
+		"snowflake-blog": "https://www.snowflake.com/en/blog/%s/", "snowflake-blog/posts/engineering": "https://www.snowflake.com/en/blog/engineering/%s/",
+	} {
+		if !strings.Contains(dir, "/") {
+			dir += "/posts"
+		}
+		posts, _ := filepath.Glob(filepath.Join(root, "testdata", dir, "*.html"))
 		for _, p := range posts {
 			files[fmt.Sprintf(url, strings.TrimSuffix(filepath.Base(p), ".html"))] = p
 		}
@@ -255,4 +265,40 @@ func TestCheckClaudeDev(t *testing.T) {
 		}
 	}
 	golden(t, "claude-dev/check.golden.json", got)
+}
+
+// TestCheckSnowflakeBlog covers the Snowflake blog's post templates: a clean
+// BlogPosting, a Yoast-style @graph with date-only dates and a suffixed
+// headline, and no JSON-LD at all. The hero and author chips cover all three.
+func TestCheckSnowflakeBlog(t *testing.T) {
+	want := []struct{ path, title, author, published string }{
+		// clean JSON-LD, code blocks, a table, three authors
+		{"kimi-k3-cortex-ai", "Announcing Kimi K3 on Snowflake Cortex AI", "Ali Taha, Danmei Xu, and Arun Agarwal", "2026-09-24T17:02:27Z"},
+		// @graph JSON-LD: date-only, headline ends in " | Snowflake"
+		{"snowpipe-streaming-elastic-channels-ga", "Introducing a Simpler Path from Data Producers to Snowflake: Elastic Channels Support Up to 20 GB/s",
+			"Chase Thomas", "2026-09-16T00:00:00-07:00"},
+		// no JSON-LD: the date comes from the hero
+		{"snowflake-integration-stackit-data-sovereignty", "Data Sovereignty Demands More Than a Promise: Snowflake Integrates with STACKIT",
+			"Seth Youssef and Imran Shamim", "2026-09-17T00:00:00-07:00"},
+		// engineering blog, YouTube embed
+		{"engineering/workload-performance-analysis-coco", "Stop Guessing, Start Optimizing: Workload Performance Analysis with CoCo", "Vignesh Siva", "2026-09-23T19:23:48Z"},
+	}
+	var args []string
+	for _, w := range want {
+		args = append(args, "--url", "https://www.snowflake.com/en/blog/"+w.path+"/")
+	}
+	got := runCheck(t, append(args, "--site", "snowflake-blog")...)
+	if len(got) != len(want) {
+		t.Fatalf("got %d results", len(got))
+	}
+	for i, w := range want {
+		d := got[i]
+		if d.Error != "" || len(d.Warnings) > 0 || d.Canonical != d.URL || d.Summary == "" || d.Image == "" || d.ContentChars < 4000 {
+			t.Errorf("%s: incomplete: %+v", w.path, d)
+		}
+		if d.Title != w.title || d.Author != w.author || d.Published != w.published {
+			t.Errorf("%s: title=%q author=%q published=%s", w.path, d.Title, d.Author, d.Published)
+		}
+	}
+	golden(t, "snowflake-blog/check.golden.json", got)
 }

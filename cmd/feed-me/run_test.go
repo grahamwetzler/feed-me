@@ -93,7 +93,7 @@ func TestRunServesFeedsAndShutsDown(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	for _, path := range []string{"feeds/claude-blog.xml", "feeds/claude-blog.atom", "feeds/select-dev.xml", "feeds/select-dev.atom",
-		"feeds/claude-dev.xml", "feeds/claude-dev.atom"} {
+		"feeds/claude-dev.xml", "feeds/claude-dev.atom", "feeds/snowflake-blog.xml", "feeds/snowflake-blog.atom"} {
 		// A feed is refreshed just after its run records success, so allow a moment.
 		var code int
 		var body string

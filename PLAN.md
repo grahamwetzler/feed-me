@@ -75,8 +75,24 @@ I inspected the site on 2026-09-24. It needed **no Go changes**: `sites/claude-d
 | Sitemap | Lists every post (8) as `https://claude.dev/blog/<slug>/`, **with a trailing slash**, alongside `/`, `/terminal/` and `/terms/`. Every `lastmod` is today's date, so it's a rebuild stamp. | Use `sitemap` discovery with `^https://claude\.dev/blog/[^/?#]+/$`. |
 | `robots.txt` | `Allow: /`. | Fetching post pages is allowed. |
 | Metadata | JSON-LD `BlogPosting` has a clean `headline`, `description`, `datePublished` (ISO date only, e.g. `2026-09-23`, no `dateModified`) and `articleSection`. `og:title` adds a ` / claude.dev Blog` suffix. | Title from JSON-LD. `articleSection` becomes the item's category. Date-only policy (§5) applies. |
-| Author | Some posts have two or three authors. JSON-LD `author` is an array, and `author`/`article:author` meta tags repeat, so a scalar source keeps only the first. The visible byline `#mAuthor` reads "Raymond Wang, Sam Attard, and Issac G." | Author: `css:#mAuthor`, falling back to JSON-LD. |
+| Author | Some posts have two or three authors. JSON-LD `author` is an array (the extractor joins every value, see §2.4), and `author`/`article:author` meta tags repeat per author, but a meta source keeps only the first tag. The visible byline `#mAuthor` reads "Raymond Wang, Sam Attard, and Issac G." | Author: `css:#mAuthor`, falling back to JSON-LD. |
 | Body | `div.prose#body`, one per post, holding `section.art-section` blocks. It includes code blocks with a "CODE <lang>" header and Copy button, `<video>` animations that repeat their poster as an `<img>`, mock Slack threads with an "App" badge and timestamps, and captions prefixed "FIG A", "VIDEO" and so on, which the prose never cites. | Exclude those pieces (see the config). **Inline SVG diagrams** (`figure.art-diagram`, with no caption) are lost, because the sanitizer drops `<svg>`; their `aria-label` describes each chart in full. |
+
+### 2.4 The Snowflake blog
+
+I inspected the site on 2026-09-25. It needed one Go change: the author field now joins every value of its winning source ("A, B, and C") instead of keeping the first. Everything else is config in `sites/snowflake-blog.yaml`.
+
+| Aspect | Finding | Implication |
+|---|---|---|
+| Platform | Adobe Experience Manager, server-rendered. `/en/blog/` is the main blog; `/en/blog/engineering/` is a separate engineering blog under the same path. | Plain HTTP fetch is enough. |
+| Feeds | None advertised. `/feed/` redirects off-site to `publish-p57963-e462109.adobeaemcloud.com/feed/?lang=en`: 20 full-text items with an empty channel title, links to internal AEM paths (`/content/snowflake-site/global/en/blog/<slug>`, two redirects from the public URL), and no engineering posts. | Not used. |
+| Sitemap | `global.sitemap.xml` is a single 6 MB `urlset` for the whole site, with 2,300+ `/en/blog/` URLs, including author pages (`/en/blog/authors/<name>/`), category pages (`/en/blog/ai-ml/`) that look just like posts, and a `blog-post-base` template page. There are no publish dates, so a first run would fetch every post. | Not used. |
+| Index pages | Both blog home pages list their ~12 newest posts server-side, as `a.snowflake-blog-card-content-card` cards and `.snowflake-blog-card-content-chip-title` featured links. Nav and category links use other classes. | Two `index` sources with `max_pages: 1`. Hourly runs catch every new post; the first run fetches about 25. |
+| `robots.txt` | `Allow: /`, with AEM system paths disallowed. Cloudflare returns a 403 block page to a bare `Mozilla/5.0` User-Agent, but feed-me's own gets the file. | Fetching posts is allowed. |
+| Templates | Posts use two JSON-LD shapes. Most have a clean `BlogPosting` with exact `datePublished`/`dateModified`, an `author` array, and `about[].name` topics. Others use a Yoast-style `@graph`: `headline` ends in " \| Snowflake", dates are date-only, and `author` is only an `@id` reference. Some posts (STACKIT) have no JSON-LD at all. | Take the title from the hero `h1` and fall back to the hero's "Sep 17, 2026" date. `about.name` becomes categories. |
+| Canonical | `og:url` is the internal AEM path. `<link rel=canonical>` is the public URL. | Override `canonical` so the link comes first. |
+| Author | The hero byline shows "Ali Taha +2". The "Learn more about the authors" chips at the foot name each author (`.snowflake-blog-author-text-name`). | Author: every chip name, joined. JSON-LD as the fallback. |
+| Body | An AEM grid of components (text, code snippets, tables, images, a YouTube "lite" embed) inside the template's only `.snowflake-layout-container-inner-padding-small`. Related posts and author chips sit outside it. The YouTube embed has no video ID in the served HTML. | Exclude `.snowflake-youtube-lite`. Posts end with Snowflake's forward-looking-statements disclaimer, which is part of the body. |
 
 ---
 
@@ -203,7 +219,7 @@ item:
   canonical: [source, ...]  # default: [meta:og:url, css:link[rel=canonical]@href, request URL]
   title:     [source, ...]
   summary:   [source, ...]
-  author:    [source, ...]
+  author:    [source, ...]  # every value of the winning source, joined: "A, B, and C"
   image:     [source, ...]
   categories: [source, ...] # multi-valued
   published:
@@ -479,10 +495,12 @@ feed-me/
     claude-blog.yaml
     claude-dev.yaml
     select-dev.yaml
+    snowflake-blog.yaml
   testdata/
     claude-blog/ # saved HTML fixtures + sitemap + expected golden feed
     claude-dev/  # sitemap + 3 saved posts + golden check output
     select-dev/  # saved posts/rss.xml (with stega chars intact) + post HTML + golden feed
+    snowflake-blog/ # both index pages + 4 saved posts (one per template) + golden check output
   deploy/
     feed-me.yaml  # container config: store on /data, JSON logs
   Dockerfile

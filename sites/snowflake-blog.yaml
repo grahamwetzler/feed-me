@@ -1,0 +1,57 @@
+id: snowflake-blog
+version: 1
+
+channel:
+  title: Snowflake Blog
+  link: https://www.snowflake.com/en/blog/
+  description: Product news, engineering deep dives, and customer stories from Snowflake.
+  language: en-us
+  author: Snowflake
+  ttl: 60
+
+schedule:
+  interval: 1h
+  max_items: 50
+  timezone: America/Los_Angeles
+
+# The sitemap is a 6 MB list of the whole site with no publish dates, so a first
+# run would fetch 2,000+ posts. The two blog home pages list the newest posts
+# server-side; their "/feed/" RSS skips the engineering blog and links internal
+# AEM paths. Category and author pages share the post URL shape, so match cards.
+discovery:
+  - type: index
+    url: https://www.snowflake.com/en/blog/
+    link_selector: 'a.snowflake-blog-card-content-card, .snowflake-blog-card-content-chip-title a'
+    max_pages: 1
+    include: ['^https://www\.snowflake\.com/en/blog/[^/?#]+/$']
+  - type: index
+    url: https://www.snowflake.com/en/blog/engineering/
+    link_selector: 'a.snowflake-blog-card-content-card, .snowflake-blog-card-content-chip-title a'
+    max_pages: 1
+    include: ['^https://www\.snowflake\.com/en/blog/engineering/[^/?#]+/$']
+
+item:
+  # Posts use two templates. One has a clean BlogPosting; the other (a Yoast-style
+  # @graph) suffixes the headline with " | Snowflake", has date-only dates and
+  # names authors only by @id. Some posts have no JSON-LD at all. The hero's
+  # headline and date and the "Learn more about the authors" chips are on every post.
+  # og:url is the internal AEM path (/content/snowflake-site/global/en/blog/...),
+  # which only redirects to the public URL; <link rel=canonical> is the public one.
+  canonical: ['css:link[rel=canonical]@href', request]
+  title:   ['css:.snowflake-blog-hero-title h1', jsonld:BlogPosting.headline, meta:og:title]
+  summary: [jsonld:BlogPosting.description, meta:description]
+  # The hero byline shows "Name +2"; the chips name everyone.
+  author:  ['css:.snowflake-blog-author-chip .snowflake-blog-author-text-name', jsonld:BlogPosting.author.name]
+  image:   [jsonld:BlogPosting.image, meta:og:image]
+  categories: [jsonld:BlogPosting.about.name]
+  published:
+    sources: [jsonld:BlogPosting.datePublished, 'css:.snowflake-blog-hero-publication-information .snowflake-blog-card-publication-information-date']
+    layouts: ['Jan 2, 2006']
+  updated:
+    sources: [jsonld:BlogPosting.dateModified]
+  content:
+    # The body is an AEM grid of components (text, code, images, video) in the
+    # template's only small-padding container; the hero and author chips sit outside it.
+    selector: '#snowflake-blog-template-main-container .snowflake-layout-container-inner-padding-small'
+    # The YouTube embed carries no video ID in the served HTML: just a play button.
+    exclude: ['script', 'style', 'noscript', 'button', '.snowflake-youtube-lite']

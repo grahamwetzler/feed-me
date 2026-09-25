@@ -1,0 +1,83 @@
+# ----------------------------------------------------------------------
+# Global default for all other crawlers (Applicable to both WordPress & AEM if paths match)
+# ----------------------------------------------------------------------
+
+User-agent: *
+Allow: /
+# Disallow WordPress admin area
+Disallow: /wp-admin/
+# Disallow common search query parameters to prevent duplicate content
+Disallow: *?s=
+Disallow: *&s=
+
+# ----------------------------------------------------------------------
+# AEM (Adobe Experience Manager) specific rules
+# ----------------------------------------------------------------------
+
+# Standard AEM authoring, system, and temporary paths
+Disallow: /apps/
+Disallow: /bin/
+Disallow: /crx/
+Disallow: /etc/
+Disallow: /etc/clientlibs/
+Disallow: /libs/
+Disallow: /system/
+Disallow: /tmp/
+Disallow: /var/
+# Disallow JCR content exposure
+Disallow: /jcr:content/
+# Disallow JCR content exposure in subpages
+Disallow: /*/_jcr_content/
+# Common AEM dispatcher cache invalidation path
+Disallow: /_/
+# Disallow AEM's infinity.json selectors
+Disallow: /*.infinity.json$
+Disallow: /*.tidy.json$
+Disallow: /*.sysview.xml$
+# If you have specific feeds to allow, add Allow rules before this
+Disallow: /*.feed.xml$
+#RITM0480998
+Disallow: /content/experience-fragments/
+
+# AEM DAM rules
+# Allow specific legal PDFs in English
+Allow: /content/dam/snowflake-site/en/legal/*.pdf
+
+# Disallow other PDFs within the main snowflake-site DAM path
+Disallow: /content/dam/snowflake-site/*.pdf
+
+# Allow crawling of the general DAM path (if it contains browsable content or other allowed assets)
+Allow: /content/dam/snowflake-site/
+
+# ----------------------------------------------------------------------
+# WordPress specific rules
+# ----------------------------------------------------------------------
+
+# Disallow theme directory
+Disallow: /wp-content/themes/snowflake/
+
+# Allow WordPress AJAX handler (important for some plugin/theme functionality)
+Allow: /wp-admin/admin-ajax.php
+
+# Disallow other common WordPress paths that don't need indexing
+Disallow: /wp-includes/
+Disallow: /wp-content/plugins/
+Disallow: /wp-content/cache/
+# WordPress REST API, usually not for direct crawling unless specific endpoints are public
+Disallow: /wp-json/
+Disallow: /xmlrpc.php
+Disallow: /readme.html
+Disallow: /license.txt
+Disallow: /trackback/
+# If you want specific feeds crawled, use Allow rules. Otherwise, sitemap is preferred.
+Disallow: /feed/
+Disallow: */feed/$
+Disallow: */trackback/$
+Disallow: /*?replytocom=
+
+# ----------------------------------------------------------------------
+# Sitemap Directives
+# ----------------------------------------------------------------------
+
+Sitemap: https://www.snowflake.com/sitemap_index.xml
+Sitemap: https://www.snowflake.com/content/snowflake-site/global.sitemap.xml

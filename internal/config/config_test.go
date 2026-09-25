@@ -94,7 +94,7 @@ func TestLoadShippedConfigs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Sites) != 3 {
+	if len(cfg.Sites) != 4 {
 		t.Fatalf("got %d sites", len(cfg.Sites))
 	}
 	cb := cfg.Site("claude-blog")
@@ -112,6 +112,10 @@ func TestLoadShippedConfigs(t *testing.T) {
 	}
 	if d := cb.Discovery[0]; !d.Accept("https://claude.com/blog/some-post") || d.Accept("https://claude.com/ja/blog/some-post") {
 		t.Error("claude-blog include regex")
+	}
+	sf := cfg.Site("snowflake-blog")
+	if d := sf.Discovery[0]; !d.Accept("https://www.snowflake.com/en/blog/some-post/") || d.Accept("https://www.snowflake.com/en/blog/authors/someone/") {
+		t.Error("snowflake-blog include regex")
 	}
 	sd := cfg.Site("select-dev")
 	if sd.Item.Published.Sources[0].Kind != SourceListing {
