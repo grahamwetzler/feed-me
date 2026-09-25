@@ -11,8 +11,10 @@ test:
 vet:
 	go vet ./...
 
+# Lints the local-dev config and the one baked into the image.
 lint: build
 	./bin/feed-me config lint
+	./bin/feed-me config lint --config deploy/feed-me.yaml
 
 # Posts each rendered feed to the W3C Feed Validation Service. Needs a store
 # populated by `feed-me build`. Run it locally or in CI, not on every commit.
