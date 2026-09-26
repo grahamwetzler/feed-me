@@ -76,10 +76,10 @@ go run ./cmd/feed-me check --site example-blog
 
 Useful flags:
 
-- `--url <post URL>` checks specific posts instead of discovered ones. You can repeat it. Pick posts that stress the config: one with code blocks, one with images or video, one with several authors, and an old one from a different template.
+- `--url <post URL>` checks specific posts instead of discovered ones. You can repeat it. Pick posts that stress the config: one with code blocks, one with images or video, one with several authors, and an old one from a different template. It skips discovery, so `listing:*` sources have no hints to read and resolve to nothing. A field that relies on one, such as a publish date taken from the site's feed, will fall through to its next source or be reported missing. Check those fields with a discovery-based run (no `--url`).
 - `--json` prints the full results as JSON, including the extracted body HTML.
 
-Change the config and rerun until every field comes from the source you expect and no warnings remain.
+Change the config and rerun until every field comes from the source you expect and a discovery-based run shows no warnings.
 
 ### 5. Build the feed and validate it
 
