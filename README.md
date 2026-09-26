@@ -14,3 +14,7 @@ It's a small Go service that turns those sites into full-text RSS and Atom feeds
 | [Snowflake Blog](https://www.snowflake.com/en/blog/) (including the engineering blog) | [`snowflake-blog.yaml`](sites/snowflake-blog.yaml) | `feeds/snowflake-blog.xml`, `feeds/snowflake-blog.atom` |
 
 To add one, see [Adding a site](docs/adding-a-site.md).
+
+## License
+
+[MIT](LICENSE)
