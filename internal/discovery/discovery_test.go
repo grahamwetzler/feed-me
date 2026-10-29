@@ -59,24 +59,24 @@ func TestSitemapClaudeBlog(t *testing.T) {
 func TestFeedSelectDev(t *testing.T) {
 	site := loadSite(t, "select-dev")
 	f, _ := fetcher(map[string]string{
-		"https://select.dev/posts/rss.xml": "../../testdata/select-dev/rss.xml",
+		"https://select.dev/blog/feed.xml": "../../testdata/select-dev/rss.xml",
 		"https://select.dev/robots.txt":    "../../testdata/select-dev/robots.txt",
 	})
 	cands, err := Discover(context.Background(), f, site)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cands) != 103 {
-		t.Fatalf("got %d candidates, want 103", len(cands))
+	if len(cands) != 50 {
+		t.Fatalf("got %d candidates, want 50", len(cands))
 	}
 	c := cands[0]
-	if c.URL != "https://select.dev/posts/databricks-liquid-clustering-simplified" {
+	if c.URL != "https://select.dev/blog/how-databricks-autoscaling-actually-works" {
 		t.Errorf("first URL %s", c.URL)
 	}
-	if c.Hints["title"] != "Databricks Liquid Clustering Simplified" {
-		t.Errorf("title hint not cleaned of stega characters: %q (%d bytes)", c.Hints["title"], len(c.Hints["title"]))
+	if c.Hints["title"] != "How Databricks Autoscaling Actually Works (and Where It Leaves Compute Running)" {
+		t.Errorf("title hint %q (%d bytes)", c.Hints["title"], len(c.Hints["title"]))
 	}
-	if c.Hints["published"] != "Mon, 21 Sep 2026 15:12:00 GMT" {
+	if c.Hints["published"] != "Fri, 23 Oct 2026 00:00:00 GMT" {
 		t.Errorf("published hint %q", c.Hints["published"])
 	}
 	for _, c := range cands {

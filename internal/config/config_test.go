@@ -118,7 +118,7 @@ func TestLoadShippedConfigs(t *testing.T) {
 		t.Error("snowflake-blog include regex")
 	}
 	sd := cfg.Site("select-dev")
-	if sd.Item.Published.Sources[0].Kind != SourceListing {
+	if ps := sd.Item.Published.Sources; ps[0].Kind != SourceJSONLD || ps[1].Kind != SourceListing {
 		t.Errorf("select-dev published: %+v", sd.Item.Published.Sources)
 	}
 }
