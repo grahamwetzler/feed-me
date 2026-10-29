@@ -115,13 +115,15 @@ func loadSiteAs(t *testing.T, id, newID string, edit func(string) string) (*conf
 
 func TestSelectDevBackfillAndSteadyState(t *testing.T) {
 	ctx := context.Background()
-	now := time.Date(2026, 9, 24, 17, 0, 0, 0, time.UTC)
+	// The autoscaling post's publish day in Toronto, so it takes its first-seen
+	// time rather than a midnight that readers would treat as already past.
+	now := time.Date(2026, 10, 23, 18, 0, 0, 0, time.UTC)
 	r := newRunner(t, &now)
 	g, site := loadSite(t, "select-dev", func(s string) string {
 		return strings.Replace(s, "max_items: 50", "max_items: 4", 1) // the four saved posts are the newest four
 	})
-	files := postFiles("select-dev", "https://select.dev/posts/")
-	files["https://select.dev/posts/rss.xml"] = root + "/testdata/select-dev/rss.xml"
+	files := postFiles("select-dev", "https://select.dev/blog/")
+	files["https://select.dev/blog/feed.xml"] = root + "/testdata/select-dev/rss.xml"
 	files["https://select.dev/robots.txt"] = root + "/testdata/select-dev/robots.txt"
 	f, tr := fetcherFor(files)
 
@@ -129,7 +131,7 @@ func TestSelectDevBackfillAndSteadyState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Discovered != 103 || st.Fetched != 4 || st.New != 4 || st.Errors != 0 {
+	if st.Discovered != 50 || st.Fetched != 4 || st.New != 4 || st.Errors != 0 {
 		t.Fatalf("first run: %+v", st)
 	}
 
@@ -144,10 +146,10 @@ func TestSelectDevBackfillAndSteadyState(t *testing.T) {
 	checkAtom(t, ctx, r.Store, g, site, "select-dev/feed.golden.atom")
 	s := string(data)
 	for _, want := range []string{
-		"<title>Databricks Liquid Clustering Simplified</title>",
-		"<pubDate>Mon, 21 Sep 2026 15:12:00 +0000</pubDate>",
-		"<dc:creator>Niall Woodward</dc:creator>",
-		"<pre><code>-- DBR 18.1 and above", // line-number spans excluded
+		"<title>How Databricks Autoscaling Actually Works (and Where It Leaves Compute Running)</title>",
+		"<pubDate>Fri, 23 Oct 2026 18:00:00 +0000</pubDate>",
+		"<dc:creator>Ian Whitestone</dc:creator>",
+		"YOUR_RUNTIME_VERSION&#34;,\n  &#34;node_type_id", // Expressive Code lines keep their breaks
 		`<atom:link href="https://rss.example.com/feeds/select-dev.xml" rel="self"`,
 	} {
 		if !strings.Contains(s, want) {
@@ -158,7 +160,7 @@ func TestSelectDevBackfillAndSteadyState(t *testing.T) {
 		t.Error("feed contains invisible characters or unsanitized attributes")
 	}
 
-	// An hour later: the 99 older feed entries still aren't worth fetching, and
+	// An hour later: the 46 older feed entries still aren't worth fetching, and
 	// the four recent items are re-checked and found unchanged.
 	now = now.Add(time.Hour)
 	before := len(tr.Requests)
@@ -462,13 +464,14 @@ func TestNewestOnlyRanksDateOnlyHintsLikePublishedAt(t *testing.T) {
 // fetched in full even though it would answer 304, so the change lands.
 func TestChangedListingHintsBypass304(t *testing.T) {
 	ctx := context.Background()
-	now := time.Date(2026, 9, 24, 17, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 10, 24, 17, 0, 0, 0, time.UTC)
 	r := newRunner(t, &now)
 	_, site := loadSite(t, "select-dev", func(s string) string {
-		return strings.Replace(s, "max_items: 50", "max_items: 4", 1)
+		s = strings.Replace(s, "max_items: 50", "max_items: 4", 1)
+		return strings.Replace(s, "[jsonld:Article.datePublished, listing:published]", "[listing:published]", 1)
 	})
-	files := postFiles("select-dev", "https://select.dev/posts/")
-	files["https://select.dev/posts/rss.xml"] = root + "/testdata/select-dev/rss.xml"
+	files := postFiles("select-dev", "https://select.dev/blog/")
+	files["https://select.dev/blog/feed.xml"] = root + "/testdata/select-dev/rss.xml"
 	f, tr := fetcherFor(files)
 	tr.ETags = true
 	if st, err := r.Run(ctx, site, f); err != nil || st.New != 4 {
@@ -480,15 +483,15 @@ func TestChangedListingHintsBypass304(t *testing.T) {
 		t.Fatalf("steady state should be all 304s: %+v", st)
 	}
 
-	files["https://select.dev/posts/rss.xml"] = editedCopy(t, files["https://select.dev/posts/rss.xml"],
-		"Mon, 21 Sep 2026 15:12:00 GMT", "Tue, 22 Sep 2026 15:12:00 GMT")
+	files["https://select.dev/blog/feed.xml"] = editedCopy(t, files["https://select.dev/blog/feed.xml"],
+		"Fri, 23 Oct 2026 00:00:00 GMT", "Sat, 24 Oct 2026 00:00:00 GMT")
 	now = now.Add(time.Hour)
 	st, err := r.Run(ctx, site, f)
 	if err != nil || st.NotModified != 3 || st.Updated != 1 {
 		t.Fatalf("hint change run: %+v %v", st, err)
 	}
-	it, _ := r.Store.ItemByURL(ctx, site.ID, "https://select.dev/posts/databricks-liquid-clustering-simplified")
-	if want := time.Date(2026, 9, 22, 15, 12, 0, 0, time.UTC); !it.Published.Equal(want) {
+	it, _ := r.Store.ItemByURL(ctx, site.ID, "https://select.dev/blog/how-databricks-autoscaling-actually-works")
+	if want := time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC); !it.Published.Equal(want) {
 		t.Errorf("published = %v, want the corrected %v", it.Published, want)
 	}
 }

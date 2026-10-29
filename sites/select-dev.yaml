@@ -3,7 +3,7 @@ version: 1
 
 channel:
   title: SELECT Blog
-  link: https://select.dev/posts
+  link: https://select.dev/blog
   description: Articles on Snowflake and Databricks cost optimization, performance, and data engineering from the SELECT team.
   language: en-us
   author: SELECT
@@ -12,26 +12,29 @@ channel:
 schedule:
   interval: 1h
   max_items: 50
-  timezone: UTC            # feed dates are already exact and in GMT
+  timezone: America/Toronto  # their dates carry no time of day; read them in SELECT's own zone
 
 discovery:
   - type: feed
-    url: https://select.dev/posts/rss.xml
-    include: ['^https://select\.dev/posts/[^/?#]+$']
+    url: https://select.dev/blog/feed.xml
+    include: ['^https://select\.dev/blog/[^/?#]+$']
 
 item:
-  # Their feed's titles and descriptions carry invisible stega characters, so
-  # prefer the page's clean meta tags. listing:* comes last, as a fallback only.
-  title:   [meta:og:title, listing:title]
+  # og:title and the JSON-LD headline are shortened for search; the page's h1
+  # and their feed carry the full title.
+  title:   ['css:article h1', listing:title, meta:og:title]
   summary: [meta:og:description, meta:description, listing:description]
-  author:  [meta:article:author]
+  author:  [jsonld:Article.author]
   image:   [meta:og:image]
   published:
-    # Exact timestamps come from their feed. The visible byline is date-only.
-    sources: [listing:published, 'css:p.uppercase > span:last-child']
-    layouts: ['Monday, January 2, 2006']
+    # JSON-LD gives a date-only value, so a post first seen on its publish day
+    # gets its first-seen time. Their feed pins every post to 00:00 GMT, which
+    # lands the post in the past and some readers skip it.
+    sources: [jsonld:Article.datePublished, listing:published]
+  updated:
+    sources: [jsonld:Article.dateModified]
   content:
-    selector: 'div[class~="prose-p:!my-0"]'
-    # Code blocks number every line with a <span class="select-none">; drop them
-    # or each line of code starts with its number.
-    exclude: ['script', 'style', 'noscript', 'button', 'pre .select-none']
+    # The body is split across several prose blocks (intro, main text, FAQ).
+    selector: 'article .site-page-prose'
+    # Code blocks are Expressive Code frames with a copy button beside each.
+    exclude: ['script', 'style', 'noscript', 'button', '.copy']

@@ -1,13 +1,11 @@
-# *
 User-agent: *
-Disallow: /*.json$
-Disallow: /*_buildManifest.js$
-Disallow: /*_middlewareManifest.js$
-Disallow: /*_ssgManifest.js$
-Disallow: /*.js$
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /settings/
+Disallow: /analytics/
+Disallow: /cdn-cgi/image/
+Disallow: /cdn-cgi/l/email-protection
 
-# Host
-Host: https://select.dev
-
-# Sitemaps
 Sitemap: https://select.dev/sitemap.xml

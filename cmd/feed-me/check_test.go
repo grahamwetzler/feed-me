@@ -28,7 +28,7 @@ func fixtures(t *testing.T) *fetchtest.Transport {
 	files := map[string]string{
 		"https://claude.com/sitemap.xml":   root + "/testdata/claude-blog/sitemap.xml",
 		"https://claude.com/robots.txt":    root + "/testdata/claude-blog/robots.txt",
-		"https://select.dev/posts/rss.xml": root + "/testdata/select-dev/rss.xml",
+		"https://select.dev/blog/feed.xml": root + "/testdata/select-dev/rss.xml",
 		"https://select.dev/robots.txt":    root + "/testdata/select-dev/robots.txt",
 		"https://claude.dev/sitemap.xml":   root + "/testdata/claude-dev/sitemap.xml",
 		"https://claude.dev/robots.txt":    root + "/testdata/claude-dev/robots.txt",
@@ -39,7 +39,7 @@ func fixtures(t *testing.T) *fetchtest.Transport {
 	}
 	// claude.dev and Snowflake post URLs end in a slash.
 	for dir, url := range map[string]string{
-		"claude-blog": "https://claude.com/blog/%s", "select-dev": "https://select.dev/posts/%s", "claude-dev": "https://claude.dev/blog/%s/",
+		"claude-blog": "https://claude.com/blog/%s", "select-dev": "https://select.dev/blog/%s", "claude-dev": "https://claude.dev/blog/%s/",
 		"snowflake-blog": "https://www.snowflake.com/en/blog/%s/", "snowflake-blog/posts/engineering": "https://www.snowflake.com/en/blog/engineering/%s/",
 	} {
 		if !strings.Contains(dir, "/") {
@@ -206,28 +206,29 @@ func TestCheckClaudeBlog(t *testing.T) {
 	golden(t, "claude-blog/check.golden.json", got)
 }
 
-// TestCheckSelectDev covers the feed-discovery path: listing dates with exact
-// times, meta-tag titles free of stega characters, and per-post authors.
+// TestCheckSelectDev covers the feed-discovery path: date-only JSON-LD dates
+// preferred over the feed's midnight GMT, full h1 titles rather than the
+// shortened og:title, and per-post authors.
 func TestCheckSelectDev(t *testing.T) {
 	got := runCheck(t, "--site", "select-dev", "--limit", "3")
 	want := []struct{ slug, title, published, author string }{
-		{"databricks-liquid-clustering-simplified", "Databricks Liquid Clustering Simplified", "2026-09-21T15:12:00Z", "Niall Woodward"},
-		{"what-is-databricks-genie-and-should-you-be-using-it-webinar-recap", "What Is Databricks Genie, and Should You Be Using It? (Webinar Recap)", "2026-09-16T18:55:00Z", "Olivier Soucy"},
-		{"snowflake-dcm-projects-infrastructure-as-code-in-plain-sql", "Snowflake DCM Projects: Infrastructure as Code, in Plain SQL", "2026-09-15T15:40:00Z", "Jeff Skoldberg"},
+		{"how-databricks-autoscaling-actually-works", "How Databricks Autoscaling Actually Works (and Where It Leaves Compute Running)", "2026-10-23T00:00:00-04:00", "Ian Whitestone"},
+		{"databricks-cost-optimization-tools-compared", "Databricks Cost Optimization Tools Compared", "2026-10-22T00:00:00-04:00", "Ian Whitestone"},
+		{"serverless-sql-warehouse-cost-optimization", "Serverless SQL Warehouse Cost Optimization", "2026-10-21T00:00:00-04:00", "Ian Whitestone"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d results", len(got))
 	}
 	for i, w := range want {
 		d := got[i]
-		if d.URL != "https://select.dev/posts/"+w.slug {
+		if d.URL != "https://select.dev/blog/"+w.slug {
 			t.Errorf("[%d] url %s", i, d.URL)
 			continue
 		}
-		if d.Title != w.title || d.Published != w.published || d.PublishedDateOnly || d.Author != w.author {
+		if d.Title != w.title || d.Published != w.published || !d.PublishedDateOnly || d.Author != w.author {
 			t.Errorf("%s: title=%q published=%s dateOnly=%v author=%q", w.slug, d.Title, d.Published, d.PublishedDateOnly, d.Author)
 		}
-		if d.Sources["published"] != "listing:published" || d.ContentChars < 5000 {
+		if d.Sources["published"] != "jsonld:Article.datePublished" || d.ContentChars < 5000 {
 			t.Errorf("%s: sources=%v elements=%v", w.slug, d.Sources, d.ContentElements)
 		}
 	}
